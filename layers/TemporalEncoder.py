@@ -1,13 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.Embed import PatchEmbedding, PositionalEmbedding
+from layers.Embed import PositionalEmbedding
 from layers.Transformer_EncDec import Encoder, EncoderLayer
-
-try:
-    from mamba_ssm import Mamba as MambaSSM
-except Exception:
-    MambaSSM = None
 
 
 class CausalConv1d(nn.Module):
@@ -68,85 +63,13 @@ class TemporalEncoderTCN(nn.Module):
         return out
 
 
-class RMSNorm(nn.Module):
-    def __init__(self, d_model, eps=1e-5):
-        super().__init__()
-        self.eps = eps
-        self.weight = nn.Parameter(torch.ones(d_model))
-
-    def forward(self, x):
-        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps) * self.weight
-
-
-class MambaResidualBlock(nn.Module):
-    def __init__(self, d_model, d_state, d_conv, expand):
-        super().__init__()
-        if MambaSSM is None:
-            raise ImportError(
-                "mamba_ssm is required for TemporalEncoderSSM. Install it to use --temporal_encoder ssm."
-            )
-        self.norm = RMSNorm(d_model)
-        self.mamba = MambaSSM(
-            d_model=d_model,
-            d_state=d_state,
-            d_conv=d_conv,
-            expand=expand,
-        )
-
-    def forward(self, x):
-        return x + self.mamba(self.norm(x))
-
-
-class TemporalEncoderSSM(nn.Module):
-    def __init__(self, d_model, num_layers, d_state, d_conv, expand, dropout,
-                 use_patch=False, patch_len=16, patch_stride=16, patch_padding=0):
-        super().__init__()
-        if MambaSSM is None:
-            raise ImportError(
-                "mamba_ssm is required for TemporalEncoderSSM. Install it to use --temporal_encoder ssm."
-            )
-        self.use_patch = use_patch
-        self.in_proj = nn.Linear(1, d_model)
-        self.dropout = nn.Dropout(dropout)
-        if self.use_patch:
-            self.patch_embedding = PatchEmbedding(
-                d_model, patch_len, patch_stride, patch_padding, dropout
-            )
-        self.blocks = nn.ModuleList(
-            [MambaResidualBlock(d_model, d_state, d_conv, expand) for _ in range(num_layers)]
-        )
-        self.norm = RMSNorm(d_model)
-
-    def forward(self, x):
-        # x: [B, L, C]
-        bsz, seq_len, n_vars = x.shape
-        if self.use_patch:
-            x = x.permute(0, 2, 1)
-            x, n_vars = self.patch_embedding(x)
-        else:
-            x = x.permute(0, 2, 1).contiguous().reshape(bsz * n_vars, seq_len, 1)
-            x = self.in_proj(x)
-            x = self.dropout(x)
-        for block in self.blocks:
-            x = block(x)
-        x = self.norm(x)
-        x = x.reshape(bsz, n_vars, x.shape[1], -1)
-        return x
-
-
 class TemporalEncoderTransformer(nn.Module):
     def __init__(self, d_model, n_heads, num_layers, d_ff, dropout, activation="gelu",
-                 attn_factor=1, use_patch=False, patch_len=16, patch_stride=16, patch_padding=0):
+                 attn_factor=1):
         super().__init__()
-        self.use_patch = use_patch
-        if self.use_patch:
-            self.patch_embedding = PatchEmbedding(
-                d_model, patch_len, patch_stride, patch_padding, dropout
-            )
-        else:
-            self.in_proj = nn.Linear(1, d_model)
-            self.position_embedding = PositionalEmbedding(d_model)
-            self.dropout = nn.Dropout(dropout)
+        self.in_proj = nn.Linear(1, d_model)
+        self.position_embedding = PositionalEmbedding(d_model)
+        self.dropout = nn.Dropout(dropout)
 
         from layers.SelfAttention_Family import FullAttention, AttentionLayer
 
@@ -171,14 +94,10 @@ class TemporalEncoderTransformer(nn.Module):
     def forward(self, x):
         # x: [B, L, C]
         bsz, seq_len, n_vars = x.shape
-        if self.use_patch:
-            x = x.permute(0, 2, 1)
-            x, n_vars = self.patch_embedding(x)
-        else:
-            x = x.permute(0, 2, 1).contiguous().reshape(bsz * n_vars, seq_len, 1)
-            x = self.in_proj(x)
-            x = x + self.position_embedding(x)
-            x = self.dropout(x)
+        x = x.permute(0, 2, 1).contiguous().reshape(bsz * n_vars, seq_len, 1)
+        x = self.in_proj(x)
+        x = x + self.position_embedding(x)
+        x = self.dropout(x)
 
         x, _ = self.encoder(x, attn_mask=None)
         x = x.reshape(bsz, n_vars, x.shape[1], -1)

@@ -95,7 +95,7 @@ if __name__ == '__main__':
                         help='the length of segmen-wise iteration of SegRNN')
 
     # optimization
-    parser.add_argument('--num_workers', type=int, default=10, help='data loader num workers')
+    parser.add_argument('--num_workers', type=int, default=0, help='data loader num workers')
     parser.add_argument('--itr', type=int, default=1, help='experiments times')
     parser.add_argument('--train_epochs', type=int, default=10, help='train epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size of train input data')
@@ -169,13 +169,22 @@ if __name__ == '__main__':
 
     # DynamicGraphMixer
     parser.add_argument('--temporal_encoder', type=str, default='tcn',
-                        help='temporal encoder for DynamicGraphMixer: tcn, ssm, or transformer')
+                        help='temporal encoder for DynamicGraphMixer: tcn or transformer')
     parser.add_argument('--graph_scale', type=int, default=1, help='coarse segment length for dynamic graph')
     parser.add_argument('--graph_rank', type=int, default=8, help='low-rank size for dynamic graph')
     parser.add_argument('--graph_smooth_lambda', type=float, default=0.0, help='graph smoothness weight')
     parser.add_argument('--tcn_kernel', type=int, default=3, help='kernel size for temporal TCN')
     parser.add_argument('--tcn_dilation', type=int, default=2, help='dilation base for temporal TCN')
-    parser.add_argument('--ssm_state_dim', type=int, default=0, help='state size for SSM encoder (0 uses d_ff)')
+
+    # DynamicGraphMixer logging
+    parser.add_argument('--graph_log_interval', type=int, default=0,
+                        help='log graph stats every N steps (0 disables)')
+    parser.add_argument('--graph_log_topk', type=int, default=5,
+                        help='top-k size for adjacency stats and neighbors')
+    parser.add_argument('--graph_log_num_segments', type=int, default=1,
+                        help='number of segments to visualize per log step')
+    parser.add_argument('--graph_log_dir', type=str, default='./graph_logs',
+                        help='output directory for graph logs')
 
     args = parser.parse_args()
     if torch.cuda.is_available() and args.use_gpu:
