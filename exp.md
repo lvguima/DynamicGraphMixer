@@ -13,7 +13,7 @@
 ## M2 Graph Observability (v1.1)
 | Exp ID | Run ID | Settings | Adj entropy (mean) | Topk mass (k=) | L1 adj diff | Adj mean/var/max | Artifacts | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| M2-1 | | log stats per epoch or per N steps |  |  |  |  | logs or csv | |
+| M2-1 | long_term_forecast_DynamicGraphMixer_TCN_ETTm1_96_96_DynamicGraphMixer_ETTm1_ftM_sl96_ll48_pl96_dm128_nh8_el2_dl1_df256_expand2_dc4_fc1_ebtimeF_dtTrue_test_0 | log stats per epoch or per N steps |  |  |  |  | `graph_logs\long_term_forecast_DynamicGraphMixer_TCN_ETTm1_96_96_DynamicGraphMixer_ETTm1_ftM_sl96_ll48_pl96_dm128_nh8_el2_dl1_df256_expand2_dc4_fc1_ebtimeF_dtTrue_test_0\stats.csv` | mse=0.35914286971092224, mae=0.40239110589027405 |
 
 | Exp ID | Run ID | Segments sampled | Heatmap or numpy path | Top-k neighbors path | Notes |
 | --- | --- | --- | --- | --- | --- |

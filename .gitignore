@@ -4,6 +4,7 @@ pic/
 tutorial/
 checkpoints/
 results/
+graph_logs/
 test_results/
 m4_results/
 /dataset/

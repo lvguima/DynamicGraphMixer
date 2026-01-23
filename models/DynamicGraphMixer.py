@@ -1,8 +1,11 @@
 import torch
 import torch.nn as nn
 
-from layers.TemporalEncoder import TemporalEncoderTCN, TemporalEncoderTransformer
-from layers.DynamicGraph import LowRankGraphGenerator, LinearGraphMixing
+from modules.tokenizer import PatchTokenizer
+from modules.temporal import TemporalEncoderWrapper
+from modules.graph_learner import LowRankGraphLearner
+from modules.mixer import GraphMixer
+from modules.head import ForecastHead
 
 
 class Model(nn.Module):
@@ -19,51 +22,31 @@ class Model(nn.Module):
         self.graph_smooth_lambda = float(getattr(configs, "graph_smooth_lambda", 0.0))
 
         self.use_patch = bool(getattr(configs, "use_patch", False))
-        self.patch_len = int(getattr(configs, "patch_len", 16))
-        self.patch_stride = int(getattr(configs, "patch_stride", self.patch_len))
+        patch_len = int(getattr(configs, "patch_len", 16))
+        patch_stride = int(getattr(configs, "patch_stride", patch_len))
+        self.tokenizer = PatchTokenizer(
+            seq_len=self.seq_len,
+            use_patch=self.use_patch,
+            patch_len=patch_len,
+            patch_stride=patch_stride,
+        )
+        self.patch_len = self.tokenizer.patch_len
+        self.patch_stride = self.tokenizer.patch_stride
+        self.num_tokens = self.tokenizer.num_tokens
 
-        if self.patch_len <= 0:
-            self.patch_len = self.seq_len
-        self.patch_len = min(self.patch_len, self.seq_len)
-        if self.patch_stride <= 0:
-            self.patch_stride = self.patch_len
-        self.patch_stride = min(self.patch_stride, self.patch_len)
-
-        tcn_kernel = int(getattr(configs, "tcn_kernel", 3))
-        tcn_dilation = int(getattr(configs, "tcn_dilation", 2))
-        temporal_encoder = getattr(configs, "temporal_encoder", "tcn").lower()
-        if temporal_encoder == "transformer":
-            self.temporal_encoder = TemporalEncoderTransformer(
-                d_model=configs.d_model,
-                n_heads=configs.n_heads,
-                num_layers=configs.e_layers,
-                d_ff=configs.d_ff,
-                dropout=configs.dropout,
-                activation=getattr(configs, "activation", "gelu"),
-                attn_factor=getattr(configs, "factor", 1),
-            )
-        elif temporal_encoder == "tcn":
-            self.temporal_encoder = TemporalEncoderTCN(
-                d_model=configs.d_model,
-                num_layers=configs.e_layers,
-                kernel_size=tcn_kernel,
-                dilation_base=tcn_dilation,
-                dropout=configs.dropout,
-            )
-        else:
-            raise ValueError(f"Unsupported temporal_encoder: {temporal_encoder}")
-        self.graph_generator = LowRankGraphGenerator(
+        self.temporal_encoder = TemporalEncoderWrapper(configs)
+        self.graph_learner = LowRankGraphLearner(
             in_dim=configs.d_model,
             rank=self.graph_rank,
             dropout=configs.dropout,
         )
-        self.graph_mixer = LinearGraphMixing(dropout=configs.dropout)
-
-        if self.use_patch:
-            self.num_tokens = (self.seq_len - self.patch_len) // self.patch_stride + 1
-        else:
-            self.num_tokens = self.seq_len
-        self.head = nn.Linear(configs.d_model * self.num_tokens, self.pred_len)
+        self.graph_generator = self.graph_learner
+        self.graph_mixer = GraphMixer(dropout=configs.dropout)
+        self.head = ForecastHead(
+            d_model=configs.d_model,
+            num_tokens=self.num_tokens,
+            pred_len=self.pred_len,
+        )
         self.graph_reg_loss = None
         self.graph_log = bool(getattr(configs, "graph_log", False))
         self.last_graph_adjs = None
@@ -81,7 +64,7 @@ class Model(nn.Module):
             end = min(start + scale, num_tokens)
             h_seg = h_time[:, :, start:end, :]
             z_t = h_seg.mean(dim=2)
-            adj, _, _ = self.graph_generator(z_t)
+            adj, _, _ = self.graph_learner(z_t)
             if self.graph_smooth_lambda > 0 and prev_adj is not None:
                 reg_term = torch.mean(torch.abs(adj - prev_adj))
                 reg = reg_term if reg is None else reg + reg_term
@@ -101,16 +84,7 @@ class Model(nn.Module):
 
     def _apply_patch_pooling(self, h_time):
         # h_time: [B, C, L, D]
-        if not self.use_patch:
-            return h_time
-        bsz, n_vars, seq_len, dim = h_time.shape
-        patch_len = min(self.patch_len, seq_len)
-        stride = min(self.patch_stride, patch_len)
-
-        h = h_time.reshape(bsz * n_vars, seq_len, dim)
-        patches = h.unfold(dimension=1, size=patch_len, step=stride)
-        h_pooled = patches.mean(dim=2)
-        return h_pooled.reshape(bsz, n_vars, -1, dim)
+        return self.tokenizer(h_time)
 
     def forecast(self, x_enc):
         h_time = self.temporal_encoder(x_enc)
@@ -121,10 +95,7 @@ class Model(nn.Module):
         if self.c_out < h_mix.shape[1]:
             h_mix = h_mix[:, -self.c_out:, :, :]
 
-        bsz, out_vars, num_tokens, dim = h_mix.shape
-        h_flat = h_mix.reshape(bsz, out_vars, num_tokens * dim)
-        out = self.head(h_flat)
-        return out.permute(0, 2, 1)
+        return self.head(h_mix)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         if self.task_name in ["long_term_forecast", "short_term_forecast"]:
