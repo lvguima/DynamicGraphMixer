@@ -33,5 +33,5 @@ class PatchTokenizer(nn.Module):
 
         h = h_time.reshape(bsz * n_vars, seq_len, dim)
         patches = h.unfold(dimension=1, size=patch_len, step=stride)
-        h_pooled = patches.mean(dim=2)
+        h_pooled = patches.mean(dim=-1)
         return h_pooled.reshape(bsz, n_vars, -1, dim)
