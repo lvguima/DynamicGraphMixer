@@ -150,6 +150,8 @@ if __name__ == '__main__':
     parser.add_argument('--patch_len', type=int, default=16, help='patch length')
     parser.add_argument('--patch_stride', type=int, default=0, help='patch stride (0 uses patch_len)')
     parser.add_argument('--use_patch', action='store_true', default=False, help='use patch pooling in DynamicGraphMixer')
+    parser.add_argument('--patch_mode', type=str, default='v1_encode_then_pool',
+                        help='patch path: v1_encode_then_pool or token_first')
 
     # GCN
     parser.add_argument('--node_dim', type=int, default=10, help='each node embbed to dim dimentions')

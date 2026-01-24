@@ -39,6 +39,9 @@ class Model(nn.Module):
             self.stable_token_window = self.stable_window
 
         self.use_patch = bool(getattr(configs, "use_patch", False))
+        self.patch_mode = str(getattr(configs, "patch_mode", "v1_encode_then_pool")).lower()
+        if self.patch_mode not in ["v1_encode_then_pool", "token_first"]:
+            raise ValueError(f"Unsupported patch_mode: {self.patch_mode}")
         patch_len = int(getattr(configs, "patch_len", 16))
         patch_stride = int(getattr(configs, "patch_stride", patch_len))
         self.tokenizer = PatchTokenizer(
@@ -184,8 +187,7 @@ class Model(nn.Module):
         if self.stable_feat is None or self.stable_encoder is None:
             return h_time
         x_stable = self.stable_feat(x_enc)
-        h_stable = self.stable_encoder(x_stable)
-        h_stable = self._apply_patch_pooling(h_stable)
+        h_stable = self._encode_with_patch_mode(x_stable, self.stable_encoder)
         if self.stable_detach:
             h_stable = h_stable.detach()
         return h_stable
@@ -194,9 +196,22 @@ class Model(nn.Module):
         # h_time: [B, C, L, D]
         return self.tokenizer(h_time)
 
+    def _apply_patch_pooling_input(self, x_enc):
+        # x_enc: [B, L, C]
+        x = x_enc.permute(0, 2, 1).unsqueeze(-1)
+        x = self.tokenizer(x)
+        x = x.squeeze(-1).permute(0, 2, 1).contiguous()
+        return x
+
+    def _encode_with_patch_mode(self, x_enc, encoder):
+        if self.patch_mode == "token_first":
+            x_enc = self._apply_patch_pooling_input(x_enc)
+            return encoder(x_enc)
+        h_time = encoder(x_enc)
+        return self._apply_patch_pooling(h_time)
+
     def forecast(self, x_enc):
-        h_time = self.temporal_encoder(x_enc)
-        h_time = self._apply_patch_pooling(h_time)
+        h_time = self._encode_with_patch_mode(x_enc, self.temporal_encoder)
         h_graph = self._select_graph_tokens(x_enc, h_time)
         h_mix, reg = self._mix_segments(h_time, h_graph)
         self.graph_reg_loss = reg
