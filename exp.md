@@ -43,8 +43,8 @@
 ## M5 Token-Level StableFeat (v1.4)
 | Exp ID | Run ID | Stable type | Settings | Metrics (MSE/MAE) | Stability | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| M5-1 | | point |  |  |  | |
-| M5-2 | | token |  |  |  | |
+| M5-1 |python -u run.py --task_name long_term_forecast --is_training 1 --model_id DynamicGraphMixer_TCN_ETTm1_96_96 --model DynamicGraphMixer --data ETTm1 --root_path ./datasets --data_path ETTm1.csv --features M --target OT --freq t --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_model 128 --d_ff 256 --enc_in 7 --dec_in 7 --c_out 7 --batch_size 64 --train_epochs 15 --patience 3 --use_norm 1 --graph_scale 8 --graph_rank 8 --graph_smooth_lambda 0 --temporal_encoder tcn --tcn_kernel 3 --tcn_dilation 2 --graph_log_interval 200 --graph_log_topk 5 --graph_log_num_segments 2 --graph_log_dir ./graph_logs --graph_log_exp_id M5-1 --graph_source stable_stream --stable_feat_type detrend --stable_window 16 | point |  | mse:0.4175976812839508, mae:0.45695507526397705 |  | |
+| M5-2 |python -u run.py --task_name long_term_forecast --is_training 1 --model_id DynamicGraphMixer_TCN_ETTm1_96_96 --model DynamicGraphMixer --data ETTm1 --root_path ./datasets --data_path ETTm1.csv --features M --target OT --freq t --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_model 128 --d_ff 256 --enc_in 7 --dec_in 7 --c_out 7 --batch_size 64 --train_epochs 15 --patience 3 --use_norm 1 --graph_scale 8 --graph_rank 8 --graph_smooth_lambda 0 --temporal_encoder tcn --tcn_kernel 3 --tcn_dilation 2 --graph_log_interval 200 --graph_log_topk 5 --graph_log_num_segments 2 --graph_log_dir ./graph_logs --graph_log_exp_id M5-2 --graph_source stable_stream --stable_level token --stable_feat_type detrend --stable_token_window 16 | token |  |  |  | |
 
 ## M6 Base and Residual Graph (v1.5)
 | Exp ID | Run ID | base_mode | alpha init | base L1 | Metrics (MSE/MAE) | Adj stats | Notes |

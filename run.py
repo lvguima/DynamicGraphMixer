@@ -261,6 +261,9 @@ if __name__ == '__main__':
                 args.embed,
                 args.distil,
                 args.des, ii)
+            exp_id = str(getattr(args, "graph_log_exp_id", "")).strip()
+            if exp_id:
+                setting = f"{setting}_{exp_id}"
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)
@@ -294,6 +297,9 @@ if __name__ == '__main__':
             args.embed,
             args.distil,
             args.des, ii)
+        exp_id = str(getattr(args, "graph_log_exp_id", "")).strip()
+        if exp_id:
+            setting = f"{setting}_{exp_id}"
 
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         exp.test(setting, test=1)
