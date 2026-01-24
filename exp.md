@@ -19,6 +19,11 @@
 | --- | --- | --- | --- | --- | --- |
 | M2-2 | |  |  |  | |
 
+## M3 Superset Refactor (v1.2)
+| Exp ID | Run ID | Notes | Metrics (MSE/MAE) |
+| --- | --- | --- | --- |
+| M3-1 | long_term_forecast_DynamicGraphMixer_TCN_ETTm1_96_96_DynamicGraphMixer_ETTm1_ftM_sl96_ll48_pl96_dm128_nh8_el2_dl1_df256_expand2_dc4_fc1_ebtimeF_dtTrue_test_0 | modularization only; V1 parity check | mse=0.3591, mae=0.4022 |
+
 ## M4 Stable Stream for Graph (v1.3)
 ### M4A Stable stream identity
 | Exp ID | Run ID | graph_source | stable_feat_type | stable_share_encoder | stable_detach | Metrics (MSE/MAE) | Adj stats | Stability | Notes |

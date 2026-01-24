@@ -175,6 +175,16 @@ if __name__ == '__main__':
     parser.add_argument('--graph_smooth_lambda', type=float, default=0.0, help='graph smoothness weight')
     parser.add_argument('--tcn_kernel', type=int, default=3, help='kernel size for temporal TCN')
     parser.add_argument('--tcn_dilation', type=int, default=2, help='dilation base for temporal TCN')
+    parser.add_argument('--graph_source', type=str, default='content_mean',
+                        help='graph source: content_mean or stable_stream')
+    parser.add_argument('--stable_feat_type', type=str, default='none',
+                        help='stable feature type: none, detrend, diff')
+    parser.add_argument('--stable_window', type=int, default=3,
+                        help='window size for stable detrend')
+    parser.add_argument('--stable_share_encoder', action='store_true', default=False,
+                        help='share temporal encoder between content and stable stream')
+    parser.add_argument('--stable_detach', action='store_true', default=False,
+                        help='detach stable stream from gradient flow')
 
     # DynamicGraphMixer logging
     parser.add_argument('--graph_log_interval', type=int, default=0,

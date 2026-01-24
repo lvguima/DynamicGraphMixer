@@ -6,6 +6,7 @@ from modules.temporal import TemporalEncoderWrapper
 from modules.graph_learner import LowRankGraphLearner
 from modules.mixer import GraphMixer
 from modules.head import ForecastHead
+from modules.stable_feat import StableFeature
 
 
 class Model(nn.Module):
@@ -20,6 +21,11 @@ class Model(nn.Module):
         self.graph_scale = max(1, int(getattr(configs, "graph_scale", 1)))
         self.graph_rank = int(getattr(configs, "graph_rank", 8))
         self.graph_smooth_lambda = float(getattr(configs, "graph_smooth_lambda", 0.0))
+        self.graph_source = str(getattr(configs, "graph_source", "content_mean")).lower()
+        self.stable_feat_type = str(getattr(configs, "stable_feat_type", "none")).lower()
+        self.stable_share_encoder = bool(getattr(configs, "stable_share_encoder", False))
+        self.stable_detach = bool(getattr(configs, "stable_detach", False))
+        self.stable_window = int(getattr(configs, "stable_window", 3))
 
         self.use_patch = bool(getattr(configs, "use_patch", False))
         patch_len = int(getattr(configs, "patch_len", 16))
@@ -35,6 +41,19 @@ class Model(nn.Module):
         self.num_tokens = self.tokenizer.num_tokens
 
         self.temporal_encoder = TemporalEncoderWrapper(configs)
+        self.stable_feat = None
+        self.stable_encoder = None
+        if self.graph_source == "stable_stream":
+            self.stable_feat = StableFeature(
+                feat_type=self.stable_feat_type,
+                window=self.stable_window,
+            )
+            if self.stable_share_encoder:
+                self.stable_encoder = self.temporal_encoder
+            else:
+                self.stable_encoder = TemporalEncoderWrapper(configs)
+        elif self.graph_source != "content_mean":
+            raise ValueError(f"Unsupported graph_source: {self.graph_source}")
         self.graph_learner = LowRankGraphLearner(
             in_dim=configs.d_model,
             rank=self.graph_rank,
@@ -51,8 +70,10 @@ class Model(nn.Module):
         self.graph_log = bool(getattr(configs, "graph_log", False))
         self.last_graph_adjs = None
 
-    def _mix_segments(self, h_time):
+    def _mix_segments(self, h_time, h_graph=None):
         # h_time: [B, C, N, D]
+        if h_graph is None:
+            h_graph = h_time
         bsz, n_vars, num_tokens, dim = h_time.shape
         scale = min(self.graph_scale, num_tokens)
 
@@ -63,7 +84,8 @@ class Model(nn.Module):
         for start in range(0, num_tokens, scale):
             end = min(start + scale, num_tokens)
             h_seg = h_time[:, :, start:end, :]
-            z_t = h_seg.mean(dim=2)
+            h_graph_seg = h_graph[:, :, start:end, :]
+            z_t = h_graph_seg.mean(dim=2)
             adj, _, _ = self.graph_learner(z_t)
             if self.graph_smooth_lambda > 0 and prev_adj is not None:
                 reg_term = torch.mean(torch.abs(adj - prev_adj))
@@ -82,6 +104,18 @@ class Model(nn.Module):
             self.last_graph_adjs = None
         return h_mix, reg
 
+    def _select_graph_tokens(self, x_enc, h_time):
+        if self.graph_source != "stable_stream":
+            return h_time
+        if self.stable_feat is None or self.stable_encoder is None:
+            return h_time
+        x_stable = self.stable_feat(x_enc)
+        h_stable = self.stable_encoder(x_stable)
+        h_stable = self._apply_patch_pooling(h_stable)
+        if self.stable_detach:
+            h_stable = h_stable.detach()
+        return h_stable
+
     def _apply_patch_pooling(self, h_time):
         # h_time: [B, C, L, D]
         return self.tokenizer(h_time)
@@ -89,7 +123,8 @@ class Model(nn.Module):
     def forecast(self, x_enc):
         h_time = self.temporal_encoder(x_enc)
         h_time = self._apply_patch_pooling(h_time)
-        h_mix, reg = self._mix_segments(h_time)
+        h_graph = self._select_graph_tokens(x_enc, h_time)
+        h_mix, reg = self._mix_segments(h_time, h_graph)
         self.graph_reg_loss = reg
 
         if self.c_out < h_mix.shape[1]:
