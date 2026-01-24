@@ -179,6 +179,10 @@ if __name__ == '__main__':
                         help='initial logit for base mixing alpha (sigmoid)')
     parser.add_argument('--graph_base_l1', type=float, default=0.0,
                         help='L1 regularization weight for base adjacency')
+    parser.add_argument('--gate_mode', type=str, default='none',
+                        help='graph mixing gate: none, scalar, per_var, per_token')
+    parser.add_argument('--gate_init', type=float, default=-4.0,
+                        help='initial logit for mixing gate (sigmoid)')
     parser.add_argument('--tcn_kernel', type=int, default=3, help='kernel size for temporal TCN')
     parser.add_argument('--tcn_dilation', type=int, default=2, help='dilation base for temporal TCN')
     parser.add_argument('--graph_source', type=str, default='content_mean',

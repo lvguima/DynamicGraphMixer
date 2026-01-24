@@ -24,6 +24,8 @@ class Model(nn.Module):
         self.graph_base_mode = str(getattr(configs, "graph_base_mode", "none")).lower()
         self.graph_base_alpha_init = float(getattr(configs, "graph_base_alpha_init", -8.0))
         self.graph_base_l1 = float(getattr(configs, "graph_base_l1", 0.0))
+        self.gate_mode = str(getattr(configs, "gate_mode", "none")).lower()
+        self.gate_init = float(getattr(configs, "gate_init", -4.0))
         self.graph_source = str(getattr(configs, "graph_source", "content_mean")).lower()
         self.stable_level = str(getattr(configs, "stable_level", "point")).lower()
         self.stable_feat_type = str(getattr(configs, "stable_feat_type", "none")).lower()
@@ -85,7 +87,13 @@ class Model(nn.Module):
         elif self.graph_base_mode != "none":
             raise ValueError(f"Unsupported graph_base_mode: {self.graph_base_mode}")
         self.graph_generator = self.graph_learner
-        self.graph_mixer = GraphMixer(dropout=configs.dropout)
+        self.graph_mixer = GraphMixer(
+            dropout=configs.dropout,
+            gate_mode=self.gate_mode,
+            num_vars=self.enc_in,
+            num_tokens=self.num_tokens,
+            gate_init=self.gate_init,
+        )
         self.head = ForecastHead(
             d_model=configs.d_model,
             num_tokens=self.num_tokens,
@@ -131,7 +139,7 @@ class Model(nn.Module):
             prev_adj = adj
             if log_adjs is not None:
                 log_adjs.append(adj.detach().cpu())
-            h_seg = self.graph_mixer(adj, h_seg)
+            h_seg = self.graph_mixer(adj, h_seg, token_offset=start)
             segments.append(h_seg)
         h_mix = torch.cat(segments, dim=2)
         if reg is None:
