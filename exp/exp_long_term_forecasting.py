@@ -2,7 +2,12 @@ from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
 from utils.metrics import metric
-from utils.graph_logging import compute_graph_stats, append_graph_stats, save_graph_visuals
+from utils.graph_logging import (
+    compute_graph_stats,
+    append_graph_stats,
+    save_graph_visuals,
+    compute_tensor_stats,
+)
 import torch
 import torch.nn as nn
 from torch import optim
@@ -24,7 +29,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         interval = int(getattr(self.args, "graph_log_interval", 0))
         return interval > 0 and step % interval == 0
 
-    def _log_graph_stats(self, setting, epoch, step, adjs):
+    def _log_graph_stats(self, setting, epoch, step, model_ref):
+        adjs = getattr(model_ref, "last_graph_adjs", None)
         if not adjs:
             return
         log_root = getattr(self.args, "graph_log_dir", "./graph_logs")
@@ -34,9 +40,22 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         topk = int(getattr(self.args, "graph_log_topk", 5))
         num_segments = int(getattr(self.args, "graph_log_num_segments", 1))
 
-        stats = compute_graph_stats(adjs, topk=topk)
+        raw_adjs = getattr(model_ref, "last_graph_raw_adjs", None)
+        base_adj = getattr(model_ref, "last_graph_base_adj", None)
+        stats = compute_graph_stats(adjs, topk=topk, raw_adjs=raw_adjs, base_adj=base_adj)
         if stats is None:
             return
+        gate_tensor = None
+        if hasattr(model_ref, "graph_mixer"):
+            gate_param = getattr(model_ref.graph_mixer, "gate", None)
+            if gate_param is not None:
+                gate_tensor = torch.sigmoid(gate_param.detach())
+        alpha_tensor = None
+        base_alpha = getattr(model_ref, "graph_base_alpha", None)
+        if base_alpha is not None:
+            alpha_tensor = torch.sigmoid(base_alpha.detach())
+        stats.update(compute_tensor_stats(gate_tensor, prefix="gate_"))
+        stats.update(compute_tensor_stats(alpha_tensor, prefix="alpha_"))
         stats = {
             "epoch": epoch,
             "step": step,
@@ -198,7 +217,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     model_optim.step()
 
                 if log_graph and hasattr(model_ref, "last_graph_adjs"):
-                    self._log_graph_stats(setting, epoch + 1, step, model_ref.last_graph_adjs)
+                    self._log_graph_stats(setting, epoch + 1, step, model_ref)
 
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)

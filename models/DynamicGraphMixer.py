@@ -108,6 +108,8 @@ class Model(nn.Module):
         self.graph_base_reg_loss = None
         self.graph_log = bool(getattr(configs, "graph_log", False))
         self.last_graph_adjs = None
+        self.last_graph_raw_adjs = None
+        self.last_graph_base_adj = None
 
     def _sparsify_adj(self, adj):
         if self.adj_sparsify != "topk":
@@ -145,6 +147,11 @@ class Model(nn.Module):
         reg = None
         prev_adj = None
         log_adjs = [] if self.graph_log else None
+        log_raw_adjs = [] if self.graph_log else None
+        if self.graph_log and base_adj is not None:
+            self.last_graph_base_adj = base_adj_single.detach().cpu()
+        elif self.graph_log:
+            self.last_graph_base_adj = None
         for start in range(0, num_tokens, scale):
             end = min(start + scale, num_tokens)
             h_seg = h_time[:, :, start:end, :]
@@ -153,6 +160,8 @@ class Model(nn.Module):
             adj, _, _ = self.graph_learner(z_t)
             if base_adj is not None:
                 adj = (1.0 - alpha) * adj + alpha * base_adj
+            if log_raw_adjs is not None:
+                log_raw_adjs.append(adj.detach().cpu())
             adj = self._sparsify_adj(adj)
             if self.graph_smooth_lambda > 0 and prev_adj is not None:
                 reg_term = torch.mean(torch.abs(adj - prev_adj))
@@ -170,8 +179,11 @@ class Model(nn.Module):
         self.graph_base_reg_loss = base_reg
         if log_adjs is not None:
             self.last_graph_adjs = log_adjs
+            self.last_graph_raw_adjs = log_raw_adjs
         else:
             self.last_graph_adjs = None
+            self.last_graph_raw_adjs = None
+            self.last_graph_base_adj = None
         return h_mix, reg
 
     def _select_graph_tokens(self, x_enc, h_time):

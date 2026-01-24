@@ -37,6 +37,11 @@
 - Results output:
   - `results/<setting>/metrics.npy`
   - `result_long_term_forecast.txt` (append)
+- Stats fields (high-level):
+  - post: entropy/topk_mass/topk_overlap/adj_diff/diag/offdiag
+  - raw: entropy/topk_mass/topk_overlap/adj_diff + conf stats
+  - gate/alpha: mean/std/quantiles/saturation
+  - base: entropy/topk_mass/diag/offdiag
 
 ## Global record fields (fill per experiment)
 | Field | Value |
@@ -50,8 +55,11 @@
 | Model | |
 | Key config delta | |
 | MSE / MAE | |
-| Graph stats (entropy/topk_mass/adj_diff) | |
-| Gate/alpha stats | |
+| Graph stats (raw/post entropy/topk_mass/topk_overlap/adj_diff/diag/offdiag) | |
+| Conf stats (conf_mean/std/p10/p50/p90) | |
+| Gate stats (mean/std/p10/p50/p90/sat_low/sat_high) | |
+| Alpha stats (mean/std/p10/p50/p90/sat_low/sat_high) | |
+| Base stats (entropy/topk_mass/diag/offdiag) | |
 | Log paths | |
 | Notes | |
 
@@ -60,10 +68,12 @@
 ## v2.0 - Baseline freeze + observability
 
 ### Code tasks
-- [ ] Log adj_raw entropy/topk_mass pre-sparsify
-- [ ] Log adj entropy/topk_mass post-sparsify
+- [ ] Log adj_raw entropy/topk_mass/topk_overlap pre-sparsify
+- [ ] Log adj entropy/topk_mass/topk_overlap post-sparsify
 - [ ] Log adj_diff mean(|A_t - A_{t-1}|)
-- [ ] Log gate and alpha stats
+- [ ] Log conf stats from raw entropy
+- [ ] Log gate and alpha stats (mean/std/quantiles/saturation)
+- [ ] Log base graph entropy/topk_mass/diag/offdiag (if enabled)
 - [ ] Save stats to `graph_logs/<exp_id>/stats.csv`
 
 ### Experiments
@@ -361,4 +371,3 @@
 - Final v2 config:
 - Key ablations:
 - Final decision:
-
