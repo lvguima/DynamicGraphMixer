@@ -28,7 +28,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         if not adjs:
             return
         log_root = getattr(self.args, "graph_log_dir", "./graph_logs")
-        log_dir = os.path.join(log_root, setting)
+        exp_id = str(getattr(self.args, "graph_log_exp_id", "")).strip()
+        log_name = exp_id if exp_id else setting
+        log_dir = os.path.join(log_root, log_name)
         topk = int(getattr(self.args, "graph_log_topk", 5))
         num_segments = int(getattr(self.args, "graph_log_num_segments", 1))
 

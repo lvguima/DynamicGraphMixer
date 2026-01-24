@@ -187,6 +187,8 @@ if __name__ == '__main__':
                         help='detach stable stream from gradient flow')
 
     # DynamicGraphMixer logging
+    parser.add_argument('--graph_log_exp_id', type=str, default='',
+                        help='log subdir name for graph logs (overrides setting when provided)')
     parser.add_argument('--graph_log_interval', type=int, default=0,
                         help='log graph stats every N steps (0 disables)')
     parser.add_argument('--graph_log_topk', type=int, default=5,
