@@ -3,7 +3,7 @@ from .temporal import TemporalEncoderWrapper
 from .graph_learner import LowRankGraphLearner
 from .mixer import GraphMixer
 from .head import ForecastHead
-from .stable_feat import StableFeature
+from .stable_feat import StableFeature, StableFeatureToken
 
 __all__ = [
     "PatchTokenizer",
@@ -12,4 +12,5 @@ __all__ = [
     "GraphMixer",
     "ForecastHead",
     "StableFeature",
+    "StableFeatureToken",
 ]

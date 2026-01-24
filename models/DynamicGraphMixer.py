@@ -6,7 +6,7 @@ from modules.temporal import TemporalEncoderWrapper
 from modules.graph_learner import LowRankGraphLearner
 from modules.mixer import GraphMixer
 from modules.head import ForecastHead
-from modules.stable_feat import StableFeature
+from modules.stable_feat import StableFeature, StableFeatureToken
 
 
 class Model(nn.Module):
@@ -22,10 +22,14 @@ class Model(nn.Module):
         self.graph_rank = int(getattr(configs, "graph_rank", 8))
         self.graph_smooth_lambda = float(getattr(configs, "graph_smooth_lambda", 0.0))
         self.graph_source = str(getattr(configs, "graph_source", "content_mean")).lower()
+        self.stable_level = str(getattr(configs, "stable_level", "point")).lower()
         self.stable_feat_type = str(getattr(configs, "stable_feat_type", "none")).lower()
         self.stable_share_encoder = bool(getattr(configs, "stable_share_encoder", False))
         self.stable_detach = bool(getattr(configs, "stable_detach", False))
         self.stable_window = int(getattr(configs, "stable_window", 3))
+        self.stable_token_window = int(getattr(configs, "stable_token_window", 0))
+        if self.stable_token_window <= 0:
+            self.stable_token_window = self.stable_window
 
         self.use_patch = bool(getattr(configs, "use_patch", False))
         patch_len = int(getattr(configs, "patch_len", 16))
@@ -42,16 +46,25 @@ class Model(nn.Module):
 
         self.temporal_encoder = TemporalEncoderWrapper(configs)
         self.stable_feat = None
+        self.stable_token_feat = None
         self.stable_encoder = None
         if self.graph_source == "stable_stream":
-            self.stable_feat = StableFeature(
-                feat_type=self.stable_feat_type,
-                window=self.stable_window,
-            )
-            if self.stable_share_encoder:
-                self.stable_encoder = self.temporal_encoder
+            if self.stable_level == "token":
+                self.stable_token_feat = StableFeatureToken(
+                    feat_type=self.stable_feat_type,
+                    window=self.stable_token_window,
+                )
+            elif self.stable_level == "point":
+                self.stable_feat = StableFeature(
+                    feat_type=self.stable_feat_type,
+                    window=self.stable_window,
+                )
+                if self.stable_share_encoder:
+                    self.stable_encoder = self.temporal_encoder
+                else:
+                    self.stable_encoder = TemporalEncoderWrapper(configs)
             else:
-                self.stable_encoder = TemporalEncoderWrapper(configs)
+                raise ValueError(f"Unsupported stable_level: {self.stable_level}")
         elif self.graph_source != "content_mean":
             raise ValueError(f"Unsupported graph_source: {self.graph_source}")
         self.graph_learner = LowRankGraphLearner(
@@ -107,6 +120,13 @@ class Model(nn.Module):
     def _select_graph_tokens(self, x_enc, h_time):
         if self.graph_source != "stable_stream":
             return h_time
+        if self.stable_level == "token":
+            if self.stable_token_feat is None:
+                return h_time
+            h_stable = self.stable_token_feat(h_time)
+            if self.stable_detach:
+                h_stable = h_stable.detach()
+            return h_stable
         if self.stable_feat is None or self.stable_encoder is None:
             return h_time
         x_stable = self.stable_feat(x_enc)
