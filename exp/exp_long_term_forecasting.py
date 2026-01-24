@@ -48,15 +48,17 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         save_graph_visuals(adjs, vis_dir, topk=topk, num_segments=num_segments)
 
     def _get_graph_reg_loss(self):
-        if not hasattr(self.args, "graph_smooth_lambda"):
-            return 0.0
-        if self.args.graph_smooth_lambda <= 0:
-            return 0.0
         model_ref = self.model.module if isinstance(self.model, nn.DataParallel) else self.model
-        graph_reg = getattr(model_ref, "graph_reg_loss", None)
-        if graph_reg is None:
-            return 0.0
-        return graph_reg * self.args.graph_smooth_lambda
+        total = 0.0
+        if hasattr(self.args, "graph_smooth_lambda") and self.args.graph_smooth_lambda > 0:
+            graph_reg = getattr(model_ref, "graph_reg_loss", None)
+            if graph_reg is not None:
+                total = total + graph_reg * self.args.graph_smooth_lambda
+        if hasattr(self.args, "graph_base_l1") and self.args.graph_base_l1 > 0:
+            base_reg = getattr(model_ref, "graph_base_reg_loss", None)
+            if base_reg is not None:
+                total = total + base_reg * self.args.graph_base_l1
+        return total
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()

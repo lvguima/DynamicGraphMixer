@@ -21,6 +21,9 @@ class Model(nn.Module):
         self.graph_scale = max(1, int(getattr(configs, "graph_scale", 1)))
         self.graph_rank = int(getattr(configs, "graph_rank", 8))
         self.graph_smooth_lambda = float(getattr(configs, "graph_smooth_lambda", 0.0))
+        self.graph_base_mode = str(getattr(configs, "graph_base_mode", "none")).lower()
+        self.graph_base_alpha_init = float(getattr(configs, "graph_base_alpha_init", -8.0))
+        self.graph_base_l1 = float(getattr(configs, "graph_base_l1", 0.0))
         self.graph_source = str(getattr(configs, "graph_source", "content_mean")).lower()
         self.stable_level = str(getattr(configs, "stable_level", "point")).lower()
         self.stable_feat_type = str(getattr(configs, "stable_feat_type", "none")).lower()
@@ -72,6 +75,15 @@ class Model(nn.Module):
             rank=self.graph_rank,
             dropout=configs.dropout,
         )
+        self.graph_base_logits = None
+        self.graph_base_alpha = None
+        if self.graph_base_mode == "mix":
+            self.graph_base_logits = nn.Parameter(torch.zeros(self.enc_in, self.enc_in))
+            self.graph_base_alpha = nn.Parameter(
+                torch.tensor(self.graph_base_alpha_init, dtype=torch.float)
+            )
+        elif self.graph_base_mode != "none":
+            raise ValueError(f"Unsupported graph_base_mode: {self.graph_base_mode}")
         self.graph_generator = self.graph_learner
         self.graph_mixer = GraphMixer(dropout=configs.dropout)
         self.head = ForecastHead(
@@ -80,6 +92,7 @@ class Model(nn.Module):
             pred_len=self.pred_len,
         )
         self.graph_reg_loss = None
+        self.graph_base_reg_loss = None
         self.graph_log = bool(getattr(configs, "graph_log", False))
         self.last_graph_adjs = None
 
@@ -89,6 +102,16 @@ class Model(nn.Module):
             h_graph = h_time
         bsz, n_vars, num_tokens, dim = h_time.shape
         scale = min(self.graph_scale, num_tokens)
+
+        base_adj = None
+        base_reg = None
+        alpha = None
+        if self.graph_base_mode == "mix":
+            base_adj_single = torch.softmax(self.graph_base_logits, dim=-1)
+            base_adj = base_adj_single.unsqueeze(0).expand(bsz, -1, -1)
+            alpha = torch.sigmoid(self.graph_base_alpha)
+            if self.graph_base_l1 > 0:
+                base_reg = base_adj_single.abs().mean()
 
         segments = []
         reg = None
@@ -100,6 +123,8 @@ class Model(nn.Module):
             h_graph_seg = h_graph[:, :, start:end, :]
             z_t = h_graph_seg.mean(dim=2)
             adj, _, _ = self.graph_learner(z_t)
+            if base_adj is not None:
+                adj = (1.0 - alpha) * adj + alpha * base_adj
             if self.graph_smooth_lambda > 0 and prev_adj is not None:
                 reg_term = torch.mean(torch.abs(adj - prev_adj))
                 reg = reg_term if reg is None else reg + reg_term
@@ -111,6 +136,9 @@ class Model(nn.Module):
         h_mix = torch.cat(segments, dim=2)
         if reg is None:
             reg = h_time.new_tensor(0.0)
+        if base_reg is None:
+            base_reg = h_time.new_tensor(0.0)
+        self.graph_base_reg_loss = base_reg
         if log_adjs is not None:
             self.last_graph_adjs = log_adjs
         else:

@@ -173,6 +173,12 @@ if __name__ == '__main__':
     parser.add_argument('--graph_scale', type=int, default=1, help='coarse segment length for dynamic graph')
     parser.add_argument('--graph_rank', type=int, default=8, help='low-rank size for dynamic graph')
     parser.add_argument('--graph_smooth_lambda', type=float, default=0.0, help='graph smoothness weight')
+    parser.add_argument('--graph_base_mode', type=str, default='none',
+                        help='base graph mode: none or mix')
+    parser.add_argument('--graph_base_alpha_init', type=float, default=-8.0,
+                        help='initial logit for base mixing alpha (sigmoid)')
+    parser.add_argument('--graph_base_l1', type=float, default=0.0,
+                        help='L1 regularization weight for base adjacency')
     parser.add_argument('--tcn_kernel', type=int, default=3, help='kernel size for temporal TCN')
     parser.add_argument('--tcn_dilation', type=int, default=2, help='dilation base for temporal TCN')
     parser.add_argument('--graph_source', type=str, default='content_mean',
