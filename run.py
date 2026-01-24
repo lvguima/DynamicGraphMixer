@@ -179,6 +179,10 @@ if __name__ == '__main__':
                         help='initial logit for base mixing alpha (sigmoid)')
     parser.add_argument('--graph_base_l1', type=float, default=0.0,
                         help='L1 regularization weight for base adjacency')
+    parser.add_argument('--adj_sparsify', type=str, default='none',
+                        help='adjacency sparsify mode: none or topk')
+    parser.add_argument('--adj_topk', type=int, default=0,
+                        help='top-k for adjacency sparsify (0 disables)')
     parser.add_argument('--gate_mode', type=str, default='none',
                         help='graph mixing gate: none, scalar, per_var, per_token')
     parser.add_argument('--gate_init', type=float, default=-4.0,

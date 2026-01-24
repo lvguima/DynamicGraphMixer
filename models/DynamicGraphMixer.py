@@ -24,6 +24,8 @@ class Model(nn.Module):
         self.graph_base_mode = str(getattr(configs, "graph_base_mode", "none")).lower()
         self.graph_base_alpha_init = float(getattr(configs, "graph_base_alpha_init", -8.0))
         self.graph_base_l1 = float(getattr(configs, "graph_base_l1", 0.0))
+        self.adj_sparsify = str(getattr(configs, "adj_sparsify", "none")).lower()
+        self.adj_topk = int(getattr(configs, "adj_topk", 0))
         self.gate_mode = str(getattr(configs, "gate_mode", "none")).lower()
         self.gate_init = float(getattr(configs, "gate_init", -4.0))
         self.graph_source = str(getattr(configs, "graph_source", "content_mean")).lower()
@@ -104,6 +106,21 @@ class Model(nn.Module):
         self.graph_log = bool(getattr(configs, "graph_log", False))
         self.last_graph_adjs = None
 
+    def _sparsify_adj(self, adj):
+        if self.adj_sparsify != "topk":
+            return adj
+        k = max(0, int(self.adj_topk))
+        if k <= 0:
+            return adj
+        bsz, n_vars, _ = adj.shape
+        k = min(k, n_vars)
+        vals, idx = torch.topk(adj, k, dim=-1)
+        mask = torch.zeros_like(adj)
+        mask.scatter_(-1, idx, 1.0)
+        masked = adj * mask
+        denom = masked.sum(dim=-1, keepdim=True).clamp_min(1e-12)
+        return masked / denom
+
     def _mix_segments(self, h_time, h_graph=None):
         # h_time: [B, C, N, D]
         if h_graph is None:
@@ -133,6 +150,7 @@ class Model(nn.Module):
             adj, _, _ = self.graph_learner(z_t)
             if base_adj is not None:
                 adj = (1.0 - alpha) * adj + alpha * base_adj
+            adj = self._sparsify_adj(adj)
             if self.graph_smooth_lambda > 0 and prev_adj is not None:
                 reg_term = torch.mean(torch.abs(adj - prev_adj))
                 reg = reg_term if reg is None else reg + reg_term
