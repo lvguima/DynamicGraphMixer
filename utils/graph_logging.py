@@ -238,6 +238,50 @@ def append_graph_stats(csv_path, stats):
         writer.writerow(stats)
 
 
+def update_graph_metrics(csv_path, metrics, epoch=-1, step=-1):
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    safe_metrics = {}
+    for key, value in metrics.items():
+        if value is None:
+            safe_metrics[key] = float("nan")
+        else:
+            safe_metrics[key] = float(value)
+
+    if not os.path.exists(csv_path):
+        fieldnames = ["epoch", "step"] + list(safe_metrics.keys())
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerow({"epoch": epoch, "step": step, **safe_metrics})
+        return
+
+    with open(csv_path, newline="") as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames or []
+        rows = list(reader)
+
+    if not fieldnames:
+        fieldnames = ["epoch", "step"]
+    for key in safe_metrics:
+        if key not in fieldnames:
+            fieldnames.append(key)
+
+    if rows:
+        target = rows[-1]
+    else:
+        target = {"epoch": epoch, "step": step}
+        rows.append(target)
+    target["epoch"] = epoch
+    target["step"] = step
+    for key, value in safe_metrics.items():
+        target[key] = value
+
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def _topk_neighbors(adj, topk):
     k = int(topk)
     if k <= 0:

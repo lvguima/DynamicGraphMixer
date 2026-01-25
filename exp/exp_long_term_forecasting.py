@@ -7,6 +7,7 @@ from utils.graph_logging import (
     append_graph_stats,
     save_graph_visuals,
     compute_tensor_stats,
+    update_graph_metrics,
 )
 import torch
 import torch.nn as nn
@@ -33,10 +34,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         adjs = getattr(model_ref, "last_graph_adjs", None)
         if not adjs:
             return
-        log_root = getattr(self.args, "graph_log_dir", "./graph_logs")
-        exp_id = str(getattr(self.args, "graph_log_exp_id", "")).strip()
-        log_name = exp_id if exp_id else setting
-        log_dir = os.path.join(log_root, log_name)
+        log_dir = self._graph_log_dir(setting)
         topk = int(getattr(self.args, "graph_log_topk", 5))
         num_segments = int(getattr(self.args, "graph_log_num_segments", 1))
 
@@ -65,6 +63,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         vis_dir = os.path.join(log_dir, f"epoch{epoch:03d}_step{step:05d}")
         save_graph_visuals(adjs, vis_dir, topk=topk, num_segments=num_segments)
+
+    def _graph_log_dir(self, setting):
+        log_root = getattr(self.args, "graph_log_dir", "./graph_logs")
+        exp_id = str(getattr(self.args, "graph_log_exp_id", "")).strip()
+        log_name = exp_id if exp_id else setting
+        return os.path.join(log_root, log_name)
 
     def _get_graph_reg_loss(self):
         model_ref = self.model.module if isinstance(self.model, nn.DataParallel) else self.model
@@ -327,6 +331,11 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         mae, mse, rmse, mape, mspe = metric(preds, trues)
         print('mse:{}, mae:{}, dtw:{}'.format(mse, mae, dtw))
+        log_dir = self._graph_log_dir(setting)
+        update_graph_metrics(
+            os.path.join(log_dir, "stats.csv"),
+            {"mse": mse, "mae": mae},
+        )
         f = open("result_long_term_forecast.txt", 'a')
         f.write(setting + "  \n")
         f.write('mse:{}, mae:{}, dtw:{}'.format(mse, mae, dtw))
