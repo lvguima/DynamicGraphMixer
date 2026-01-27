@@ -28,15 +28,15 @@ mse:0.3333682119846344, mae:0.36996880173683167
 
 | ExpID | Dataset | seq→pred | Variant | Key Args | MSE | MAE | gate_mean | alpha_mean | ent | overlap | adj_diff | Notes |
 |---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|
-| F0 | ETTm1 | 96→96 | v2_best | (copy v2 best args) |  |  |  |  |  |  |  | baseline |
-| F1 | ETTm1 | 96→96 | SMGP | graph_map_norm=ema_detrend, graph_map_alpha=0.3 |  |  |  |  |  |  |  |  |
+| F0 | ETTm1 | 96→96 | v2_best | gate=per_var(-6), graph_scale=8 | 0.333418 | 0.369808 | 0.002545 | 0.000312 | 1.177287 | 0.891315 | 0.126304 | baseline |
+| F1 | ETTm1 | 96→96 | SMGP | graph_map_norm=ema_detrend, graph_map_alpha=0.3 | 0.333296 | 0.369657 | 0.002511 | 0.000333 | 1.737882 | 0.856047 | 0.064255 | slight gain, gate_mean unchanged |
 | F0 | Traffic | 96→96 | v2_best | (copy v2 best args) |  |  |  |  |  |  |  | baseline |
 | F1 | Traffic | 96→96 | SMGP | graph_map_norm=ema_detrend, graph_map_alpha=0.3 |  |  |  |  |  |  |  |  |
 
 ### (Optional) Stronger propagation
 | ExpID | Dataset | seq→pred | Variant | Key Args | MSE | MAE | gate_mean | alpha_mean | ent | overlap | adj_diff | Notes |
 |---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|
-| F2 | Traffic | 96→96 | SMGP+strong_gate | E1 + gate_init=-2 |  |  |  |  |  |  |  | check stability |
+| F2 | ETTm1 | 96→96 | SMGP+strong_gate | F1 + gate_init=-2 | 0.336202 | 0.374268 | 0.114171 | 0.000370 | 1.750082 | 0.845495 | 0.057989 | worse on ETTm1 (gate too strong) |
 
 ---
 
@@ -46,4 +46,3 @@ mse:0.3333682119846344, mae:0.36996880173683167
 |---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|
 | F3 | ETTm1 | 96→96 | DualStream+SMGP | decomp_mode=ema,decomp_alpha=0.3 + SMGP |  |  |  |  |  |  |  |  |
 | F3 | Traffic | 96→96 | DualStream+SMGP | decomp_mode=ema,decomp_alpha=0.3 + SMGP |  |  |  |  |  |  |  |  |
-
