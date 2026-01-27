@@ -253,11 +253,16 @@ def main() -> None:
 
     if args.stage in ("F3", "all"):
         variants = [
-            ("v3_F3_alpha0.3", ["--decomp_alpha", "0.3"]),
-            ("v3_F3_alpha0.1", ["--decomp_alpha", "0.1"]),
-            ("v3_F3_alpha0.5", ["--decomp_alpha", "0.5"]),
+            # shared trend head (refine around best alpha)
+            ("v3_F3_alpha0.1_share1", "0.1", "1"),
+            ("v3_F3_alpha0.2_share1", "0.2", "1"),
+            ("v3_F3_alpha0.3_share1", "0.3", "1"),
+            # per-variable trend head (small grid)
+            ("v3_F3_alpha0.1_share0", "0.1", "0"),
+            ("v3_F3_alpha0.2_share0", "0.2", "0"),
+            ("v3_F3_alpha0.3_share0", "0.3", "0"),
         ]
-        for suffix, decomp_args in variants:
+        for suffix, alpha, share in variants:
             exp_id = f"{suffix}_{dataset_tag}"
             model_id = f"DynamicGraphMixer_TCN_{dataset_tag}_96_96_{suffix}"
             run_exp(
@@ -273,11 +278,12 @@ def main() -> None:
                     *map_args,
                     "--decomp_mode",
                     "ema",
+                    "--decomp_alpha",
+                    alpha,
                     "--trend_head",
                     "linear",
                     "--trend_head_share",
-                    "1",
-                    *decomp_args,
+                    share,
                 ],
                 args.dry_run,
             )

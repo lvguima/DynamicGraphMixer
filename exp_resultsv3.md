@@ -53,5 +53,9 @@ mse:0.3333682119846344, mae:0.36996880173683167
 
 | ExpID | Dataset | seq→pred | Variant | Key Args | MSE | MAE | gate_mean | alpha_mean | ent | overlap | adj_diff | Notes |
 |---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|
-| F3 | ETTm1 | 96→96 | DualStream+SMGP | decomp_mode=ema,decomp_alpha=0.3 + SMGP |  |  |  |  |  |  |  |  |
-| F3 | Traffic | 96→96 | DualStream+SMGP | decomp_mode=ema,decomp_alpha=0.3 + SMGP |  |  |  |  |  |  |  |  |
+| F3 | ETTm1 | 96→96 | DualStream+SMGP | decomp_alpha=0.1 + ma_detrend(16) | 0.316988 | 0.357506 | 0.002444 | 0.000335 | 1.790245 | 0.859050 | 0.037898 | best in ETTm1, trend ratio≈0.879 |
+| F3 | ETTm1 | 96→96 | DualStream+SMGP | decomp_alpha=0.3 + ma_detrend(16) | 0.326613 | 0.362494 | 0.002469 | 0.000329 | 1.731072 | 0.858157 | 0.055875 | trend ratio≈0.967 |
+| F3 | ETTm1 | 96→96 | DualStream+SMGP | decomp_alpha=0.5 + ma_detrend(16) | 0.329261 | 0.364531 | 0.002480 | 0.000326 | 1.721187 | 0.858604 | 0.057997 | trend ratio≈0.987 (over-smooth) |
+| F3 | Weather | 96→96 | DualStream+SMGP | decomp_alpha=0.1 + ema_detrend(0.1) | 0.172776 | 0.230077 | 0.002481 | 0.000336 | 1.791741 | 0.367154 | 0.057241 | best in Weather, trend ratio≈0.876 |
+| F3 | Weather | 96→96 | DualStream+SMGP | decomp_alpha=0.3 + ema_detrend(0.1) | 0.178982 | 0.237261 | 0.002496 | 0.000336 | 1.791627 | 0.289705 | 0.064538 | worse, trend ratio≈0.906 |
+| F3 | Weather | 96→96 | DualStream+SMGP | decomp_alpha=0.5 + ema_detrend(0.1) | 0.184784 | 0.246073 | 0.002504 | 0.000335 | 1.791744 | 0.289894 | 0.064627 | worse, trend ratio≈0.981 |
