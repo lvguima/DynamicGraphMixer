@@ -52,10 +52,40 @@ mse:0.3333682119846344, mae:0.36996880173683167
 ## Step-B (Optional): Dual-Stream EMA
 
 | ExpID | Dataset | seq→pred | Variant | Key Args | MSE | MAE | gate_mean | alpha_mean | ent | overlap | adj_diff | Notes |
-|---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|
-| F3 | ETTm1 | 96→96 | DualStream+SMGP | decomp_alpha=0.1 + ma_detrend(16) | 0.316988 | 0.357506 | 0.002444 | 0.000335 | 1.790245 | 0.859050 | 0.037898 | best in ETTm1, trend ratio≈0.879 |
-| F3 | ETTm1 | 96→96 | DualStream+SMGP | decomp_alpha=0.3 + ma_detrend(16) | 0.326613 | 0.362494 | 0.002469 | 0.000329 | 1.731072 | 0.858157 | 0.055875 | trend ratio≈0.967 |
-| F3 | ETTm1 | 96→96 | DualStream+SMGP | decomp_alpha=0.5 + ma_detrend(16) | 0.329261 | 0.364531 | 0.002480 | 0.000326 | 1.721187 | 0.858604 | 0.057997 | trend ratio≈0.987 (over-smooth) |
-| F3 | Weather | 96→96 | DualStream+SMGP | decomp_alpha=0.1 + ema_detrend(0.1) | 0.172776 | 0.230077 | 0.002481 | 0.000336 | 1.791741 | 0.367154 | 0.057241 | best in Weather, trend ratio≈0.876 |
-| F3 | Weather | 96→96 | DualStream+SMGP | decomp_alpha=0.3 + ema_detrend(0.1) | 0.178982 | 0.237261 | 0.002496 | 0.000336 | 1.791627 | 0.289705 | 0.064538 | worse, trend ratio≈0.906 |
-| F3 | Weather | 96→96 | DualStream+SMGP | decomp_alpha=0.5 + ema_detrend(0.1) | 0.184784 | 0.246073 | 0.002504 | 0.000335 | 1.791744 | 0.289894 | 0.064627 | worse, trend ratio≈0.981 |
+| F3 | ETTm1 | 96?96 | DualStream+SMGP | decomp_alpha=0.1, share=1 + ma_detrend(16) | 0.317572 | 0.357874 | 0.002445 | 0.000335 | 1.790193 | 0.858685 | 0.038126 | best among share=1 |
+| F3 | ETTm1 | 96?96 | DualStream+SMGP | decomp_alpha=0.2, share=1 + ma_detrend(16) | 0.322738 | 0.359730 | 0.002454 | 0.000333 | 1.766823 | 0.855154 | 0.047645 | trend ratio?0.943 |
+| F3 | ETTm1 | 96?96 | DualStream+SMGP | decomp_alpha=0.3, share=1 + ma_detrend(16) | 0.327053 | 0.362687 | 0.002468 | 0.000329 | 1.733516 | 0.857427 | 0.055508 | trend ratio?0.967 |
+| F3 | ETTm1 | 96?96 | DualStream+SMGP | decomp_alpha=0.1, share=0 + ma_detrend(16) | 0.323628 | 0.365772 | 0.002418 | 0.000333 | 1.763939 | 0.864529 | 0.050150 | share=0 worse |
+| F3 | ETTm1 | 96?96 | DualStream+SMGP | decomp_alpha=0.2, share=0 + ma_detrend(16) | 0.327864 | 0.367715 | 0.002407 | 0.000334 | 1.777316 | 0.860674 | 0.046016 | share=0 worse |
+| F3 | ETTm1 | 96?96 | DualStream+SMGP | decomp_alpha=0.3, share=0 + ma_detrend(16) | 0.334566 | 0.371023 | 0.002422 | 0.000334 | 1.788958 | 0.855073 | 0.037752 | share=0 much worse |
+| F3 | Weather | 96?96 | DualStream+SMGP | decomp_alpha=0.1, share=1 + ema_detrend(0.1) | 0.172784 | 0.230148 | 0.002487 | 0.000336 | 1.791757 | 0.345089 | 0.059626 | best among share=1 |
+| F3 | Weather | 96?96 | DualStream+SMGP | decomp_alpha=0.2, share=1 + ema_detrend(0.1) | 0.174666 | 0.232466 | 0.002504 | 0.000335 | 1.791743 | 0.285823 | 0.064900 | worse |
+| F3 | Weather | 96?96 | DualStream+SMGP | decomp_alpha=0.3, share=1 + ema_detrend(0.1) | 0.178997 | 0.237288 | 0.002497 | 0.000336 | 1.791624 | 0.291748 | 0.064524 | worse |
+| F3 | Weather | 96?96 | DualStream+SMGP | decomp_alpha=0.1, share=0 + ema_detrend(0.1) | 0.168427 | 0.236641 | 0.002438 | 0.000336 | 1.791758 | 0.282522 | 0.065411 | best MSE but MAE worse |
+| F3 | Weather | 96?96 | DualStream+SMGP | decomp_alpha=0.2, share=0 + ema_detrend(0.1) | 0.169409 | 0.239377 | 0.002470 | 0.000336 | 1.791755 | 0.315909 | 0.062215 | worse |
+| F3 | Weather | 96?96 | DualStream+SMGP | decomp_alpha=0.3, share=0 + ema_detrend(0.1) | 0.170493 | 0.241196 | 0.002455 | 0.000335 | 1.791759 | 0.262365 | 0.067094 | worse |
+
+---
+
+## v3 Summary (Current)
+- Use share=1 trend head as default (stable MAE on both ETTm1 and Weather).
+- Dual-Stream best region: `decomp_alpha=0.1` (larger alpha over-emphasizes trend).
+- SMGP map choice:
+  - ETTm1: `ma_detrend(window=16)`
+  - Weather: `ema_detrend(alpha=0.1)`
+
+## Best Config (Share=1)
+- **ETTm1 (96->96)**
+  - `graph_map_norm=ma_detrend, graph_map_window=16`
+  - `decomp_mode=ema, decomp_alpha=0.1`
+  - `trend_head=linear, trend_head_share=1`
+  - `gate_mode=per_var, gate_init=-6`
+  - `graph_scale=8, adj_topk=6`
+  - Metrics: MSE 0.31757 / MAE 0.35787
+- **Weather (96->96)**
+  - `graph_map_norm=ema_detrend, graph_map_alpha=0.1`
+  - `decomp_mode=ema, decomp_alpha=0.1`
+  - `trend_head=linear, trend_head_share=1`
+  - `gate_mode=per_var, gate_init=-6`
+  - `graph_scale=8, adj_topk=6`
+  - Metrics: MSE 0.17278 / MAE 0.23015
