@@ -183,6 +183,14 @@ if __name__ == '__main__':
                         help='alpha for graph_map_norm=ema_detrend')
     parser.add_argument('--graph_map_detach', action='store_true', default=False,
                         help='detach map branch from gradient flow')
+    parser.add_argument('--decomp_mode', type=str, default='none',
+                        help='decomposition mode: none or ema')
+    parser.add_argument('--decomp_alpha', type=float, default=0.3,
+                        help='alpha for EMA decomposition')
+    parser.add_argument('--trend_head', type=str, default='none',
+                        help='trend head: none or linear')
+    parser.add_argument('--trend_head_share', type=int, default=1,
+                        help='share trend head across variables (1 yes, 0 no)')
     parser.add_argument('--graph_base_mode', type=str, default='none',
                         help='base graph mode: none or mix')
     parser.add_argument('--graph_base_alpha_init', type=float, default=-8.0,

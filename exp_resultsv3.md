@@ -29,7 +29,16 @@ mse:0.3333682119846344, mae:0.36996880173683167
 | ExpID | Dataset | seq→pred | Variant | Key Args | MSE | MAE | gate_mean | alpha_mean | ent | overlap | adj_diff | Notes |
 |---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|
 | F0 | ETTm1 | 96→96 | v2_best | gate=per_var(-6), graph_scale=8 | 0.333418 | 0.369808 | 0.002545 | 0.000312 | 1.177287 | 0.891315 | 0.126304 | baseline |
-| F1 | ETTm1 | 96→96 | SMGP | graph_map_norm=ema_detrend, graph_map_alpha=0.3 | 0.333296 | 0.369657 | 0.002511 | 0.000333 | 1.737882 | 0.856047 | 0.064255 | slight gain, gate_mean unchanged |
+| F1 | ETTm1 | 96→96 | SMGP | ema_detrend alpha=0.1 | 0.333550 | 0.369766 | 0.002520 | 0.000329 | 1.554796 | 0.868588 | 0.096559 | slightly worse vs F0 |
+| F1 | ETTm1 | 96→96 | SMGP | ema_detrend alpha=0.3 | 0.333121 | 0.369539 | 0.002512 | 0.000333 | 1.737902 | 0.856331 | 0.064133 | best among ETTm1 SMGP |
+| F1 | ETTm1 | 96→96 | SMGP | ema_detrend alpha=0.5 | 0.333334 | 0.369575 | 0.002506 | 0.000336 | 1.790040 | 0.855235 | 0.039008 | small gain, more smoothing |
+| F1 | ETTm1 | 96→96 | SMGP | diff1 | 0.333347 | 0.369688 | 0.002503 | 0.000336 | 1.790132 | 0.853774 | 0.039205 | similar to ema a0.5 |
+| F1 | ETTm1 | 96→96 | SMGP | ma_detrend window=16 | 0.332923 | 0.369483 | 0.002509 | 0.000335 | 1.778012 | 0.860390 | 0.046645 | best overall on ETTm1 |
+| F1 | Weather | 96→96 | SMGP | ema_detrend alpha=0.1 | 0.182167 | 0.240396 | 0.002545 | 0.000336 | 1.791359 | 0.438799 | 0.051301 | best on Weather |
+| F1 | Weather | 96→96 | SMGP | ema_detrend alpha=0.3 | 0.182395 | 0.240501 | 0.002565 | 0.000336 | 1.791755 | 0.341274 | 0.059749 | slightly worse |
+| F1 | Weather | 96→96 | SMGP | ema_detrend alpha=0.5 | 0.182253 | 0.240390 | 0.002569 | 0.000336 | 1.791759 | 0.330141 | 0.060793 | similar to a0.1 |
+| F1 | Weather | 96→96 | SMGP | diff1 | 0.182353 | 0.240450 | 0.002567 | 0.000336 | 1.791759 | 0.311418 | 0.062492 | worst overlap |
+| F1 | Weather | 96→96 | SMGP | ma_detrend window=16 | 0.182485 | 0.240459 | 0.002591 | 0.000336 | 1.791755 | 0.348945 | 0.059308 | slightly worse |
 | F0 | Traffic | 96→96 | v2_best | (copy v2 best args) |  |  |  |  |  |  |  | baseline |
 | F1 | Traffic | 96→96 | SMGP | graph_map_norm=ema_detrend, graph_map_alpha=0.3 |  |  |  |  |  |  |  |  |
 

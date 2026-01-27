@@ -10,6 +10,33 @@ from modules.head import ForecastHead
 from modules.stable_feat import StableFeature, StableFeatureToken
 
 
+class TrendHead(nn.Module):
+    def __init__(self, seq_len, pred_len, num_vars, share=True):
+        super().__init__()
+        self.share = bool(share)
+        self.num_vars = int(num_vars)
+        self.seq_len = int(seq_len)
+        self.pred_len = int(pred_len)
+        if self.share:
+            self.proj = nn.Linear(self.seq_len, self.pred_len)
+        else:
+            self.proj = nn.ModuleList(
+                [nn.Linear(self.seq_len, self.pred_len) for _ in range(self.num_vars)]
+            )
+
+    def forward(self, x):
+        # x: [B, L, C]
+        x = x.permute(0, 2, 1).contiguous()
+        if self.share:
+            out = self.proj(x)
+        else:
+            outs = []
+            for idx in range(self.num_vars):
+                outs.append(self.proj[idx](x[:, idx, :]))
+            out = torch.stack(outs, dim=1)
+        return out.permute(0, 2, 1)
+
+
 class Model(nn.Module):
     def __init__(self, configs):
         super().__init__()
@@ -26,6 +53,10 @@ class Model(nn.Module):
         self.graph_map_window = int(getattr(configs, "graph_map_window", 16))
         self.graph_map_alpha = float(getattr(configs, "graph_map_alpha", 0.3))
         self.graph_map_detach = bool(getattr(configs, "graph_map_detach", False))
+        self.decomp_mode = str(getattr(configs, "decomp_mode", "none")).lower()
+        self.decomp_alpha = float(getattr(configs, "decomp_alpha", 0.3))
+        self.trend_head_mode = str(getattr(configs, "trend_head", "none")).lower()
+        self.trend_head_share = bool(int(getattr(configs, "trend_head_share", 1)))
         self.graph_base_mode = str(getattr(configs, "graph_base_mode", "none")).lower()
         self.graph_base_alpha_init = float(getattr(configs, "graph_base_alpha_init", -8.0))
         self.graph_base_l1 = float(getattr(configs, "graph_base_l1", 0.0))
@@ -87,6 +118,18 @@ class Model(nn.Module):
             window=self.graph_map_window,
             alpha=self.graph_map_alpha,
         )
+        self.trend_head = None
+        if self.decomp_mode not in ("none", "ema"):
+            raise ValueError(f"Unsupported decomp_mode: {self.decomp_mode}")
+        if self.trend_head_mode not in ("none", "linear"):
+            raise ValueError(f"Unsupported trend_head: {self.trend_head_mode}")
+        if self.decomp_mode == "ema" and self.trend_head_mode == "linear":
+            self.trend_head = TrendHead(
+                seq_len=self.seq_len,
+                pred_len=self.pred_len,
+                num_vars=self.enc_in,
+                share=self.trend_head_share,
+            )
         self.graph_learner = LowRankGraphLearner(
             in_dim=configs.d_model,
             rank=self.graph_rank,
@@ -122,6 +165,7 @@ class Model(nn.Module):
         self.last_graph_base_adj = None
         self.last_graph_map_mean_abs = None
         self.last_graph_map_std_mean = None
+        self.last_decomp_energy = None
 
     def _sparsify_adj(self, adj):
         if self.adj_sparsify != "topk":
@@ -227,14 +271,23 @@ class Model(nn.Module):
         x = x.squeeze(-1).permute(0, 2, 1).contiguous()
         return x
 
-    def _encode_with_patch_mode(self, x_enc, encoder):
-        if self.patch_mode == "token_first":
-            x_enc = self._apply_patch_pooling_input(x_enc)
-            return encoder(x_enc)
-        h_time = encoder(x_enc)
-        return self._apply_patch_pooling(h_time)
+    def _ema_decompose(self, x_enc):
+        # x_enc: [B, L, C]
+        alpha = max(0.0, min(1.0, float(self.decomp_alpha)))
+        bsz, seq_len, n_vars = x_enc.shape
+        if seq_len == 0:
+            return x_enc, x_enc
+        trend = []
+        prev = x_enc[:, 0, :]
+        trend.append(prev)
+        for idx in range(1, seq_len):
+            prev = alpha * x_enc[:, idx, :] + (1.0 - alpha) * prev
+            trend.append(prev)
+        trend = torch.stack(trend, dim=1)
+        season = x_enc - trend
+        return trend, season
 
-    def forecast(self, x_enc):
+    def _forecast_graph(self, x_enc):
         h_time = self._encode_with_patch_mode(x_enc, self.temporal_encoder)
         h_graph = self._select_graph_tokens(x_enc, h_time)
         h_map = self.graph_map(h_graph)
@@ -253,6 +306,39 @@ class Model(nn.Module):
             h_mix = h_mix[:, -self.c_out:, :, :]
 
         return self.head(h_mix)
+
+    def _forecast_trend(self, x_trend):
+        if self.trend_head is None:
+            return x_trend.new_zeros((x_trend.shape[0], self.pred_len, self.c_out))
+        out = self.trend_head(x_trend)
+        if self.c_out < out.shape[2]:
+            out = out[:, :, -self.c_out:]
+        return out
+
+    def _encode_with_patch_mode(self, x_enc, encoder):
+        if self.patch_mode == "token_first":
+            x_enc = self._apply_patch_pooling_input(x_enc)
+            return encoder(x_enc)
+        h_time = encoder(x_enc)
+        return self._apply_patch_pooling(h_time)
+
+    def forecast(self, x_enc):
+        if self.decomp_mode == "ema":
+            x_trend, x_season = self._ema_decompose(x_enc)
+            if self.graph_log:
+                trend_energy = x_trend.detach().pow(2).mean().cpu()
+                season_energy = x_season.detach().pow(2).mean().cpu()
+                denom = trend_energy + season_energy + 1e-12
+                ratio = trend_energy / denom
+                self.last_decomp_energy = (trend_energy, season_energy, ratio)
+            else:
+                self.last_decomp_energy = None
+            season_out = self._forecast_graph(x_season)
+            trend_out = self._forecast_trend(x_trend)
+            return season_out + trend_out
+
+        self.last_decomp_energy = None
+        return self._forecast_graph(x_enc)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         if self.task_name in ["long_term_forecast", "short_term_forecast"]:

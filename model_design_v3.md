@@ -1,4 +1,4 @@
-# DynamicGraphMixer v3 — Stationary-Map Graph + (Optional) EMA Dual-Stream
+﻿# DynamicGraphMixer v3 — Stationary-Map Graph + (Optional) EMA Dual-Stream
 
 > 核心目标：突破 v2 在 ETTm1(96→96) 上“靠近 0 的 gate”所暴露出的性能瓶颈，让 **跨变量信息传播真正变得“可用且可控”**，而不是一味把 gate 压到 0。
 
@@ -53,7 +53,10 @@
 - `diff1`：一阶差分（pad 回长度 L）
 - `ema_detrend(alpha)`：EMA trend + residual（trend=EMA，map 用 residual）
 
-> 经验上：`ema_detrend(alpha=0.3)` 作为默认优先尝试（参考 xPatch 的经验）。
+> 经验上（当前实验结果）：
+> - **ETTm1**：`ma_detrend(window=16)` 表现最好（优于 ema 系列与 diff1）
+> - **Weather**：`ema_detrend(alpha=0.1)` 略优
+> 若无先验数据集特性，先用 `ma_detrend(16)`，再试 `ema_detrend(0.3)` 作为对照。
 
 ### 2.2 GraphLearner：不改主结构，只改输入
 
@@ -114,25 +117,24 @@
 我们把 v3 分成两步走：
 
 ### Step-A：先验证 SMGP 是否能让图更可用
-- E0：v2 best（复现）
-- E1：SMGP + `ema_detrend(alpha=0.3)`
-- E2：E1 + 更激进的 `gate_init`（比如 -2），看是否能提升并保持稳定  
-（E2 建议只在 Traffic/Electricity 上跑）
-
+- F0：v2 best（复现）
+- F1：SMGP（ETTm1：`ma_detrend(window=16)`；Weather：`ema_detrend(alpha=0.1)`）
+- F2：F1 + 更激进的 `gate_init`（比如 -2），看是否能提升并保持稳定  
+（F2 建议只在大通道数据集上跑）
 ### Step-B：如果 Step-A 在小数据集收益有限，再加 Dual-Stream
-- E3：Dual-Stream(EMA α=0.3) + season 走 SMGP
+- F3：Dual-Stream(EMA α=0.3) + season 走 SMGP
 
 数据集建议（实验量适中）：
-- 小通道：ETTm1 (C=7) 96→96 （快速 sanity & 回归检查）
-- 大通道：Traffic 或 Electricity 96→96 （验证跨变量传播价值）
-
+- 小通道：ETTm1 (C=7) 96→96（快速 sanity & 回归检查）
+- 中通道：Weather (C=21) 96→96（检验中等维度）
+- 大通道：Traffic 或 Electricity 96→96（验证跨变量传播价值）
 ---
 
 ## 7. 预期结果与成功标准（建议）
 
-- **Traffic/Electricity**：E1 相对 E0 有可见提升（MSE 或 MAE ≥ 0.002 级别），并且 `gate_mean` 不再长期贴近 0。  
-- **ETTm1**：不回退即可；如果能小幅提升更好。  
-- 如果 E1 有效但 E2 无效：说明 map 更可靠了，但强传播仍会引入噪声，可考虑更强的正则/平滑而不是继续提 gate。
+- **Traffic/Electricity**：F1 相对 F0 有可见提升（MSE 或 MAE ≥ 0.002 级别），并且 `gate_mean` 不再长期贴近 0。  
+- **ETTm1/Weather**：不回退即可；如果能小幅提升更好。  
+- 如果 F1 有效但 F2 无效：说明 map 更可靠了，但强传播仍会引入噪声，可考虑更强的正则/平滑而不是继续提 gate。
 
 ---
 
@@ -141,4 +143,6 @@
 - Map-Value 解耦：用 stationarized representation 学关系图，但传播保留非平稳 value。  
 - 在动态图框架下，将“去非平稳”定位为 **图权重估计问题**，而不是简单做归一化/门控。  
 - 可插拔：SMGP 不强绑 backbone；Dual-Stream 作为可选扩展。
+
+
 

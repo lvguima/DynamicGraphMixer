@@ -1,4 +1,4 @@
-# Implementation TODO v3
+﻿# Implementation TODO v3
 
 > 目标：实现 v3 的 SMGP（Stationary-Map Graph Propagation）为主线；Dual-Stream EMA 分解作为可选第二步。  
 > 约束：不做 online adaptation；实验量适中；不做 multi-seeds。
@@ -61,18 +61,17 @@
 
 ### 2.1 Experiments
 - F0：v2 best（复现）
-- F1：E0 + `graph_map_norm=ema_detrend`，`graph_map_alpha=0.3`
-- F2：E1 + `gate_init=-2`（可选，只在大通道数据集跑）
-
-### 2.2 数据集建议（两档）
+- F1：SMGP（ETTm1：`ma_detrend(window=16)`；Weather：`ema_detrend(alpha=0.1)`）
+- F2：F1 + `gate_init=-2`（可选，只在大通道数据集跑）
+### 2.2 数据集建议（三档）
 - 小通道：ETTm1 96→96
+- 中通道：Weather 96→96
 - 大通道：Traffic 或 Electricity 96→96
-
 ### 2.3 观察点
-- F1 是否能让 `gate_mean` 显著上升（比如从 0.002 变到 >0.01）
-- A_entropy 是否更稳定（不是越低越好，而是与性能提升是否相关）
-- 大通道数据集是否有更显著收益
-
+- F1 是否带来稳定提升（ETTm1：`ma_detrend(16)`当前最佳；Weather：`ema_detrend(0.1)`当前最佳）
+- `gate_mean` 是否仍长期贴近 0（若几乎不变，说明主要是图更平滑而非更强传播）
+- A_entropy / overlap / adj_diff 与性能提升是否一致（避免“更尖锐但更差”）
+- 大通道数据集是否更有显著收益
 ---
 
 ## 3. v3.2（可选）— Dual-Stream EMA Decomposition
@@ -98,7 +97,7 @@
 - `trend_head_share`
 
 ### 3.2 最小实验
-- F3：Dual-Stream(ema α=0.3) + SMGP(ema_detrend α=0.3)
+- F3：Dual-Stream(ema α=0.3) + SMGP（ETTm1: ma_detrend(16), Weather: ema_detrend(0.1)）
 
 ---
 
@@ -113,6 +112,7 @@
 ## 5. 退出条件 / 决策规则（建议）
 
 - 若 F1 在大通道数据集明显提升，优先深挖 SMGP（可能再做 graph smoothing / 正则）。  
-- 若 F1 没提升但 Dual-Stream（E3）有效，则主线转向“分解 + season 用图”。  
+- 若 F1 没提升但 Dual-Stream（F3）有效，则主线转向“分解 + season 用图”。  
 - 若两者都无效：说明瓶颈不在 graph 权重估计，可能要转向 frequency normalization / probabilistic / Koopman 等更大范式。
+
 

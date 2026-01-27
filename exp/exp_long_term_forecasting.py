@@ -60,6 +60,11 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         map_std_mean = getattr(model_ref, "last_graph_map_std_mean", None)
         if map_std_mean is not None:
             stats["map_std_mean"] = float(map_std_mean)
+        decomp_energy = getattr(model_ref, "last_decomp_energy", None)
+        if decomp_energy is not None:
+            stats["E_trend"] = float(decomp_energy[0])
+            stats["E_season"] = float(decomp_energy[1])
+            stats["E_ratio"] = float(decomp_energy[2])
         stats = {
             "epoch": epoch,
             "step": step,
@@ -192,6 +197,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                         model_ref.last_graph_map_mean_abs = None
                     if log_graph and hasattr(model_ref, "last_graph_map_std_mean"):
                         model_ref.last_graph_map_std_mean = None
+                    if log_graph and hasattr(model_ref, "last_decomp_energy"):
+                        model_ref.last_decomp_energy = None
 
                 # encoder - decoder
                 if self.args.use_amp:
