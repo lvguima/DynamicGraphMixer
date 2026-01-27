@@ -54,6 +54,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             alpha_tensor = torch.sigmoid(base_alpha.detach())
         stats.update(compute_tensor_stats(gate_tensor, prefix="gate_"))
         stats.update(compute_tensor_stats(alpha_tensor, prefix="alpha_"))
+        map_mean_abs = getattr(model_ref, "last_graph_map_mean_abs", None)
+        if map_mean_abs is not None:
+            stats["map_mean_abs"] = float(map_mean_abs)
+        map_std_mean = getattr(model_ref, "last_graph_map_std_mean", None)
+        if map_std_mean is not None:
+            stats["map_std_mean"] = float(map_std_mean)
         stats = {
             "epoch": epoch,
             "step": step,
@@ -182,6 +188,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     model_ref.graph_log = log_graph
                     if log_graph and hasattr(model_ref, "last_graph_adjs"):
                         model_ref.last_graph_adjs = None
+                    if log_graph and hasattr(model_ref, "last_graph_map_mean_abs"):
+                        model_ref.last_graph_map_mean_abs = None
+                    if log_graph and hasattr(model_ref, "last_graph_map_std_mean"):
+                        model_ref.last_graph_map_std_mean = None
 
                 # encoder - decoder
                 if self.args.use_amp:

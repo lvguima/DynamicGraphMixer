@@ -4,6 +4,7 @@ import torch.nn as nn
 from modules.tokenizer import PatchTokenizer
 from modules.temporal import TemporalEncoderWrapper
 from modules.graph_learner import LowRankGraphLearner
+from modules.graph_map import GraphMapNormalizer
 from modules.mixer import GraphMixer
 from modules.head import ForecastHead
 from modules.stable_feat import StableFeature, StableFeatureToken
@@ -21,6 +22,10 @@ class Model(nn.Module):
         self.graph_scale = max(1, int(getattr(configs, "graph_scale", 1)))
         self.graph_rank = int(getattr(configs, "graph_rank", 8))
         self.graph_smooth_lambda = float(getattr(configs, "graph_smooth_lambda", 0.0))
+        self.graph_map_norm = str(getattr(configs, "graph_map_norm", "none")).lower()
+        self.graph_map_window = int(getattr(configs, "graph_map_window", 16))
+        self.graph_map_alpha = float(getattr(configs, "graph_map_alpha", 0.3))
+        self.graph_map_detach = bool(getattr(configs, "graph_map_detach", False))
         self.graph_base_mode = str(getattr(configs, "graph_base_mode", "none")).lower()
         self.graph_base_alpha_init = float(getattr(configs, "graph_base_alpha_init", -8.0))
         self.graph_base_l1 = float(getattr(configs, "graph_base_l1", 0.0))
@@ -77,6 +82,11 @@ class Model(nn.Module):
                 raise ValueError(f"Unsupported stable_level: {self.stable_level}")
         elif self.graph_source != "content_mean":
             raise ValueError(f"Unsupported graph_source: {self.graph_source}")
+        self.graph_map = GraphMapNormalizer(
+            mode=self.graph_map_norm,
+            window=self.graph_map_window,
+            alpha=self.graph_map_alpha,
+        )
         self.graph_learner = LowRankGraphLearner(
             in_dim=configs.d_model,
             rank=self.graph_rank,
@@ -110,6 +120,8 @@ class Model(nn.Module):
         self.last_graph_adjs = None
         self.last_graph_raw_adjs = None
         self.last_graph_base_adj = None
+        self.last_graph_map_mean_abs = None
+        self.last_graph_map_std_mean = None
 
     def _sparsify_adj(self, adj):
         if self.adj_sparsify != "topk":
@@ -127,7 +139,7 @@ class Model(nn.Module):
         return masked / denom
 
     def _mix_segments(self, h_time, h_graph=None):
-        # h_time: [B, C, N, D]
+        # h_time: [B, C, N, D], h_graph provides map features for adjacency
         if h_graph is None:
             h_graph = h_time
         bsz, n_vars, num_tokens, dim = h_time.shape
@@ -225,7 +237,16 @@ class Model(nn.Module):
     def forecast(self, x_enc):
         h_time = self._encode_with_patch_mode(x_enc, self.temporal_encoder)
         h_graph = self._select_graph_tokens(x_enc, h_time)
-        h_mix, reg = self._mix_segments(h_time, h_graph)
+        h_map = self.graph_map(h_graph)
+        if self.graph_map_detach and h_map is not None:
+            h_map = h_map.detach()
+        if self.graph_log and h_map is not None:
+            self.last_graph_map_mean_abs = h_map.detach().abs().mean().cpu()
+            self.last_graph_map_std_mean = h_map.detach().std(dim=-1).mean().cpu()
+        else:
+            self.last_graph_map_mean_abs = None
+            self.last_graph_map_std_mean = None
+        h_mix, reg = self._mix_segments(h_time, h_map)
         self.graph_reg_loss = reg
 
         if self.c_out < h_mix.shape[1]:

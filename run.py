@@ -175,6 +175,14 @@ if __name__ == '__main__':
     parser.add_argument('--graph_scale', type=int, default=1, help='coarse segment length for dynamic graph')
     parser.add_argument('--graph_rank', type=int, default=8, help='low-rank size for dynamic graph')
     parser.add_argument('--graph_smooth_lambda', type=float, default=0.0, help='graph smoothness weight')
+    parser.add_argument('--graph_map_norm', type=str, default='none',
+                        help='graph map normalization: none, ma_detrend, diff1, ema_detrend')
+    parser.add_argument('--graph_map_window', type=int, default=16,
+                        help='window size for graph_map_norm=ma_detrend')
+    parser.add_argument('--graph_map_alpha', type=float, default=0.3,
+                        help='alpha for graph_map_norm=ema_detrend')
+    parser.add_argument('--graph_map_detach', action='store_true', default=False,
+                        help='detach map branch from gradient flow')
     parser.add_argument('--graph_base_mode', type=str, default='none',
                         help='base graph mode: none or mix')
     parser.add_argument('--graph_base_alpha_init', type=float, default=-8.0,
