@@ -23,11 +23,11 @@ COMMON = [
     '--temporal_encoder', 'tcn',
     '--tcn_kernel', '3',
     '--tcn_dilation', '2',
-    '--graph_rank', '8',
+    '--graph_rank', '16',
     '--graph_scale', '8',
     '--graph_smooth_lambda', '0',
     '--adj_sparsify', 'topk',
-    '--adj_topk', '6',
+    '--adj_topk', '20',
     '--graph_base_mode', 'mix',
     '--graph_base_alpha_init', '-8',
     '--graph_base_l1', '0.001',
@@ -46,11 +46,11 @@ COMMON = [
 
 EXPS = [
     ('B0', ['--decomp_mode', 'none', '--trend_head', 'none', '--graph_map_norm', 'none', '--gate_init', '-20']),
-    ('B1', ['--decomp_mode', 'none', '--trend_head', 'none', '--graph_map_norm', 'none', '--gate_init', '-6']),
-    ('B2', ['--decomp_mode', 'none', '--trend_head', 'none', '--graph_map_norm', 'ma_detrend', '--graph_map_window', '16', '--gate_init', '-6']),
+    ('B1', ['--decomp_mode', 'none', '--trend_head', 'none', '--graph_map_norm', 'none', '--gate_init', '-4']),
+    ('B2', ['--decomp_mode', 'none', '--trend_head', 'none', '--graph_map_norm', 'ma_detrend', '--graph_map_window', '16', '--gate_init', '-4']),
     ('B3', ['--decomp_mode', 'ema', '--decomp_alpha', '0.1', '--trend_head', 'linear', '--trend_head_share', '1', '--graph_map_norm', 'none', '--gate_init', '-20']),
-    ('B4', ['--decomp_mode', 'ema', '--decomp_alpha', '0.1', '--trend_head', 'linear', '--trend_head_share', '1', '--graph_map_norm', 'none', '--gate_init', '-6']),
-    ('B5', ['--decomp_mode', 'ema', '--decomp_alpha', '0.1', '--trend_head', 'linear', '--trend_head_share', '1', '--graph_map_norm', 'ma_detrend', '--graph_map_window', '16', '--gate_init', '-6']),
+    ('B4', ['--decomp_mode', 'ema', '--decomp_alpha', '0.1', '--trend_head', 'linear', '--trend_head_share', '1', '--graph_map_norm', 'none', '--gate_init', '-4']),
+    ('B5', ['--decomp_mode', 'ema', '--decomp_alpha', '0.1', '--trend_head', 'linear', '--trend_head_share', '1', '--graph_map_norm', 'ma_detrend', '--graph_map_window', '16', '--gate_init', '-4']),
 ]
 
 def run_exp(exp_id, extra):
