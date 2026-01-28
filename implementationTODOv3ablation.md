@@ -1,4 +1,4 @@
-# implementationTODOv3ablation.md
+﻿# implementationTODOv3ablation.md
 > 目标：用**尽量少的实验**回答一个关键问题：在 v3 的 Dual‑Stream 框架下，性能提升主要来自哪里？  
 > 方式：只做 3 组 ablation（每组 1 个对照），并且尽量 **不改代码，只改运行参数**。  
 > 建议：先只在 **ETTm1 (96→96)** 跑完 4 个实验；如果结论清晰，再可选在 Weather 复核一次。
@@ -201,10 +201,14 @@ python -u run.py \
 
 | ExpID | Dataset | Variant | Key change vs A0 | MSE | MAE | gate_mean | ent | overlap | adj_diff | Notes |
 |---|---|---|---|---:|---:|---:|---:|---:|---:|---|
-| A0 | ETTm1 | DS+SMGP | baseline |  |  |  |  |  |  |  |
-| A1 | ETTm1 | DS+SMGP | gate_init=-20 (≈no graph prop) |  |  |  |  |  |  |  |
-| A2 | ETTm1 | DS | graph_map_norm=none (no SMGP) |  |  |  |  |  |  |  |
-| A3 | ETTm1 | DS+SMGP | gate_init=-4 (stronger) |  |  |  |  |  |  |  |
+| A0 | ETTm1 | DS+SMGP | baseline | 0.316922 | 0.357374 | 0.002444 | 1.790298 | 0.859375 | 0.037647 | |
+| A1 | ETTm1 | DS+SMGP | gate_init=-20 (≈no graph prop) | 0.317695 | 0.357663 | 0.000000 | 1.791756 | 0.852557 | 0.035835 | |
+| A2 | ETTm1 | DS | graph_map_norm=none (no SMGP) | 0.317203 | 0.357607 | 0.002589 | 1.471901 | 0.855154 | 0.096311 | |
+| A3 | ETTm1 | DS+SMGP | gate_init=-4 (stronger) | 0.317263 | 0.357626 | 0.017667 | 1.790259 | 0.858888 | 0.037957 | |
+| A0 | Weather | DS+SMGP | baseline | 0.172784 | 0.230185 | 0.002489 | 1.791758 | 0.339191 | 0.060142 | |
+| A1 | Weather | DS+SMGP | gate_init=-20 (≈no graph prop) | 0.172877 | 0.230136 | 0.000000 | 1.791716 | 0.338975 | 0.059616 | |
+| A2 | Weather | DS | graph_map_norm=none (no SMGP) | 0.172877 | 0.230142 | 0.002493 | 1.790260 | 0.522781 | 0.043244 | |
+| A3 | Weather | DS+SMGP | gate_init=-4 (stronger) | 0.173066 | 0.230903 | 0.017852 | 1.791758 | 0.327462 | 0.061329 | |
 
 ---
 
@@ -228,3 +232,4 @@ python -u run.py \
 - Dual‑Stream 的主收益来源（分解 vs 图传播）
 - SMGP 在 DS 中是否必要
 - DS 是否真的让“更强传播”变得可行（gate 能不能抬起来）
+
