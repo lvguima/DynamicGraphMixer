@@ -60,7 +60,7 @@ def run_exp(python_bin: str, base_args: list[str], dry_run: bool) -> None:
     if dry_run:
         print(' '.join(args))
         return
-    result = subprocess.run(args, cwd=Path(__file__).resolve().parents[1])
+    result = subprocess.run(args, cwd=Path(__file__).resolve().parents[2])
     if result.returncode != 0:
         raise SystemExit(f'Run failed: {exp_id}')
 
