@@ -16,7 +16,7 @@ COMMON = [
     '--e_layers', '2',
     '--d_model', '128',
     '--d_ff', '256',
-    '--batch_size', '64',
+    '--batch_size', '16',
     '--train_epochs', '15',
     '--patience', '3',
     '--use_norm', '1',
