@@ -45,13 +45,17 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             return
         gate_tensor = None
         if hasattr(model_ref, "graph_mixer"):
-            gate_param = getattr(model_ref.graph_mixer, "gate", None)
-            if gate_param is not None:
-                gate_tensor = torch.sigmoid(gate_param.detach())
+            gate_tensor = getattr(model_ref.graph_mixer, "last_gate", None)
+            if gate_tensor is None:
+                gate_param = getattr(model_ref.graph_mixer, "gate", None)
+                if gate_param is not None:
+                    gate_tensor = torch.sigmoid(gate_param.detach())
         alpha_tensor = None
-        base_alpha = getattr(model_ref, "graph_base_alpha", None)
-        if base_alpha is not None:
-            alpha_tensor = torch.sigmoid(base_alpha.detach())
+        alpha_tensor = getattr(model_ref, "last_graph_alpha", None)
+        if alpha_tensor is None:
+            base_alpha = getattr(model_ref, "graph_base_alpha", None)
+            if base_alpha is not None:
+                alpha_tensor = torch.sigmoid(base_alpha.detach())
         stats.update(compute_tensor_stats(gate_tensor, prefix="gate_"))
         stats.update(compute_tensor_stats(alpha_tensor, prefix="alpha_"))
         map_mean_abs = getattr(model_ref, "last_graph_map_mean_abs", None)
@@ -84,10 +88,14 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def _get_graph_reg_loss(self):
         model_ref = self.model.module if isinstance(self.model, nn.DataParallel) else self.model
         total = 0.0
-        if hasattr(self.args, "graph_base_l1") and self.args.graph_base_l1 > 0:
-            base_reg = getattr(model_ref, "graph_base_reg_loss", None)
-            if base_reg is not None:
-                total = total + base_reg * self.args.graph_base_l1
+        base_reg = getattr(model_ref, "graph_base_reg_loss", None)
+        if base_reg is None:
+            return total
+        reg_lambda = float(getattr(self.args, "graph_base_reg_lambda", 0.0))
+        if reg_lambda <= 0:
+            reg_lambda = float(getattr(self.args, "graph_base_l1", 0.0))
+        if reg_lambda > 0:
+            total = total + base_reg * reg_lambda
         return total
 
     def _build_model(self):
@@ -165,6 +173,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             scaler = torch.cuda.amp.GradScaler()
 
         for epoch in range(self.args.train_epochs):
+            model_ref = self.model.module if isinstance(self.model, nn.DataParallel) else self.model
+            if hasattr(model_ref, "set_train_epoch"):
+                model_ref.set_train_epoch(epoch)
             iter_count = 0
             train_loss = []
 

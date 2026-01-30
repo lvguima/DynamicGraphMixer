@@ -210,6 +210,30 @@ if __name__ == '__main__':
                         help='graph mixing gate: none, scalar, per_var, per_token')
     parser.add_argument('--gate_init', type=float, default=-4.0,
                         help='initial logit for mixing gate (sigmoid)')
+    parser.add_argument('--gate_warmup_epochs', type=int, default=0,
+                        help='epochs to disable graph mixing at start (warmup)')
+    parser.add_argument('--gate_conf_metric', type=str, default='entropy',
+                        help='confidence metric for conf gate: entropy')
+    parser.add_argument('--gate_conf_source', type=str, default='pre_sparsify',
+                        help='confidence source for conf gate: pre_sparsify or post_sparsify')
+    parser.add_argument('--gate_conf_map', type=str, default='pow',
+                        help='confidence gate mapping: pow or affine')
+    parser.add_argument('--gate_conf_gamma', type=float, default=1.0,
+                        help='gamma for gate_conf_map=pow')
+    parser.add_argument('--gate_conf_w_init', type=float, default=4.0,
+                        help='w init for gate_conf_map=affine')
+    parser.add_argument('--gate_conf_b_init', type=float, default=-4.0,
+                        help='b init for gate_conf_map=affine')
+    parser.add_argument('--graph_base_alpha_mode', type=str, default='static',
+                        help='base alpha mode: static or conf')
+    parser.add_argument('--graph_base_alpha_w_init', type=float, default=4.0,
+                        help='w init for graph_base_alpha_mode=conf')
+    parser.add_argument('--graph_base_alpha_b_init', type=float, default=-4.0,
+                        help='b init for graph_base_alpha_mode=conf')
+    parser.add_argument('--graph_base_reg_type', type=str, default='l1',
+                        help='base graph regularization: none, l1, l2_to_identity')
+    parser.add_argument('--graph_base_reg_lambda', type=float, default=0.0,
+                        help='weight for graph_base_reg_type (overrides graph_base_l1 when > 0)')
     parser.add_argument('--tcn_kernel', type=int, default=3, help='kernel size for temporal TCN')
     parser.add_argument('--tcn_dilation', type=int, default=2, help='dilation base for temporal TCN')
     parser.add_argument('--graph_source', type=str, default='content_mean',
