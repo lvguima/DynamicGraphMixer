@@ -56,6 +56,11 @@ class Model(nn.Module):
         self.trend_head_mode = str(getattr(configs, "trend_head", "none")).lower()
         self.trend_head_share = bool(int(getattr(configs, "trend_head_share", 1)))
         self.trend_only = bool(getattr(configs, "trend_only", False))
+        self.trend_graph = bool(getattr(configs, "trend_graph", False))
+        self.trend_graph_map_norm = str(getattr(configs, "trend_graph_map_norm", "none")).lower()
+        self.trend_graph_map_window = int(getattr(configs, "trend_graph_map_window", 16))
+        self.trend_graph_map_alpha = float(getattr(configs, "trend_graph_map_alpha", 0.3))
+        self.trend_graph_map_detach = bool(getattr(configs, "trend_graph_map_detach", False))
         self.graph_base_mode = str(getattr(configs, "graph_base_mode", "none")).lower()
         self.graph_base_l1 = float(getattr(configs, "graph_base_l1", 0.0))
         self.adj_sparsify = str(getattr(configs, "adj_sparsify", "none")).lower()
@@ -97,6 +102,13 @@ class Model(nn.Module):
             window=self.graph_map_window,
             alpha=self.graph_map_alpha,
         )
+        self.trend_graph_map = None
+        if self.trend_graph:
+            self.trend_graph_map = GraphMapNormalizer(
+                mode=self.trend_graph_map_norm,
+                window=self.trend_graph_map_window,
+                alpha=self.trend_graph_map_alpha,
+            )
         self.trend_head = None
         if self.decomp_mode not in ("none", "ema"):
             raise ValueError(f"Unsupported decomp_mode: {self.decomp_mode}")
@@ -112,6 +124,9 @@ class Model(nn.Module):
         if self.trend_only:
             if self.decomp_mode != "ema" or self.trend_head is None:
                 raise ValueError("trend_only requires decomp_mode=ema and trend_head=linear.")
+        if self.trend_graph:
+            if self.decomp_mode != "ema" or self.trend_head is None:
+                raise ValueError("trend_graph requires decomp_mode=ema and trend_head=linear.")
         self.graph_learner = LowRankGraphLearner(
             in_dim=configs.d_model,
             rank=self.graph_rank,
@@ -208,10 +223,13 @@ class Model(nn.Module):
         denom = masked.sum(dim=-1, keepdim=True).clamp_min(1e-12)
         return masked / denom
 
-    def _mix_segments(self, h_time, h_graph=None):
+    def _mix_segments(self, h_time, h_graph=None, h_value=None):
         # h_time: [B, C, N, D], h_graph provides map features for adjacency
+        # h_value: [B, C, N, Dv] values to be mixed (defaults to h_time)
         if h_graph is None:
             h_graph = h_time
+        if h_value is None:
+            h_value = h_time
         bsz, n_vars, num_tokens, dim = h_time.shape
         scale = min(self.graph_scale, num_tokens)
 
@@ -241,7 +259,7 @@ class Model(nn.Module):
             self.last_graph_base_adj = None
         for start in range(0, num_tokens, scale):
             end = min(start + scale, num_tokens)
-            h_seg = h_time[:, :, start:end, :]
+            h_seg = h_value[:, :, start:end, :]
             h_graph_seg = h_graph[:, :, start:end, :]
             z_t = h_graph_seg.mean(dim=2)
             adj_dyn, _, _ = self.graph_learner(z_t)
@@ -336,13 +354,31 @@ class Model(nn.Module):
 
         return self.head(h_mix)
 
-    def _forecast_trend(self, x_trend):
+    def _forecast_trend_head(self, x_trend):
         if self.trend_head is None:
             return x_trend.new_zeros((x_trend.shape[0], self.pred_len, self.c_out))
         out = self.trend_head(x_trend)
         if self.c_out < out.shape[2]:
             out = out[:, :, -self.c_out:]
         return out
+
+    def _forecast_trend_graph(self, x_trend):
+        h_time = self.temporal_encoder(x_trend)
+        h_graph = h_time
+        h_map = h_graph
+        if self.trend_graph_map is not None:
+            h_map = self.trend_graph_map(h_graph)
+        if self.trend_graph_map_detach and h_map is not None:
+            h_map = h_map.detach()
+        x_value = x_trend.permute(0, 2, 1).contiguous().unsqueeze(-1)
+        h_mix, _ = self._mix_segments(h_time, h_map, h_value=x_value)
+        mixed = h_mix.squeeze(-1).permute(0, 2, 1).contiguous()
+        return self._forecast_trend_head(mixed)
+
+    def _forecast_trend(self, x_trend):
+        if self.trend_graph:
+            return self._forecast_trend_graph(x_trend)
+        return self._forecast_trend_head(x_trend)
 
     def forecast(self, x_enc):
         if self.decomp_mode == "ema":
@@ -357,8 +393,8 @@ class Model(nn.Module):
                 self.last_decomp_energy = None
             if self.trend_only:
                 return self._forecast_trend(x_trend)
-            season_out = self._forecast_graph(x_season)
             trend_out = self._forecast_trend(x_trend)
+            season_out = self._forecast_graph(x_season)
             return season_out + trend_out
 
         self.last_decomp_energy = None

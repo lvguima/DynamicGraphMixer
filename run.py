@@ -196,6 +196,16 @@ if __name__ == '__main__':
                         help='share trend head across variables (1 yes, 0 no)')
     parser.add_argument('--trend_only', action='store_true', default=False,
                         help='use only trend branch for prediction (requires decomp_mode=ema and trend_head=linear)')
+    parser.add_argument('--trend_graph', action='store_true', default=False,
+                        help='enable graph propagation on trend branch')
+    parser.add_argument('--trend_graph_map_norm', type=str, default='none',
+                        help='trend graph map normalization: none, ma_detrend, diff1, ema_detrend')
+    parser.add_argument('--trend_graph_map_window', type=int, default=16,
+                        help='window size for trend_graph_map_norm=ma_detrend')
+    parser.add_argument('--trend_graph_map_alpha', type=float, default=0.3,
+                        help='alpha for trend_graph_map_norm=ema_detrend')
+    parser.add_argument('--trend_graph_map_detach', action='store_true', default=False,
+                        help='detach trend graph map branch from gradient flow')
     parser.add_argument('--graph_base_mode', type=str, default='none',
                         help='base graph mode: none or mix')
     parser.add_argument('--graph_base_alpha_init', type=float, default=-8.0,

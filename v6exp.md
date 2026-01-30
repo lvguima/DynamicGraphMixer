@@ -94,3 +94,112 @@ Note: `flotation_*` only logged `mse/mae`, other fields are N/A.
 | mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 0.317395 | 0.357455 | 0.002489 | 1.736746 | 0.842236 | 0.060406 | 0.000325 | 0.082393 | 0.105717 | 0.916860 | 0.126411 | 0.878832 |
+
+# Step2 Results (warmup / confidence gate / routing)
+
+Source: `graph_logs/*_S2_*/stats.csv` (last row).
+Note: `flotation_*` only logged `mse/mae`, other fields are N/A.
+
+## C1_WARMUP3 (graph_scale=16, gate_init=-6, warmup=3)
+
+### ETTm1
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.316854 | 0.357232 | 0.002484 | 1.791759 | 0.858572 | 0.034220 | 0.000335 | 0.082738 | 0.106304 | 0.916860 | 0.126411 | 0.878832 |
+
+### weather
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.172729 | 0.229455 | 0.002476 | 1.791760 | 0.337708 | 0.060174 | 0.000335 | 0.052608 | 0.075957 | 0.764476 | 0.127317 | 0.857235 |
+
+### flotation
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.785733 | 0.622602 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+
+### grinding
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4.246447 | 0.698840 | 0.002475 | 1.791753 | 0.519896 | 0.072066 | 0.000335 | 0.046157 | 0.066317 | 1.099435 | 0.074838 | 0.936269 |
+
+## C2_CONF_GATE (conf_per_var + affine, warmup=3)
+
+### ETTm1
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.317319 | 0.357582 | 0.018039 | 1.791759 | 0.859643 | 0.033938 | 0.000336 | 0.082316 | 0.105800 | 0.916860 | 0.126411 | 0.878832 |
+
+### weather
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.173031 | 0.231278 | 0.017985 | 1.791760 | 0.340982 | 0.059936 | 0.000336 | 0.050948 | 0.073919 | 0.754258 | 0.106719 | 0.876049 |
+
+### flotation
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.784539 | 0.622052 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+
+### grinding
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4.243555 | 0.699016 | 0.017997 | 1.791753 | 0.519375 | 0.072031 | 0.000335 | 0.046145 | 0.066272 | 1.099435 | 0.074838 | 0.936269 |
+
+## C3_CONF_GATE_ROUTE (conf_per_var + routing, warmup=3)
+
+### ETTm1
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.316909 | 0.357374 | 0.018111 | 1.791688 | 0.937679 | 0.017511 | 0.527527 | 0.082461 | 0.105962 | 0.916860 | 0.126411 | 0.878832 |
+
+### weather
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.172886 | 0.231011 | 0.018219 | 1.791692 | 0.842024 | 0.018383 | 0.501548 | 0.050974 | 0.073918 | 0.754258 | 0.106719 | 0.876049 |
+
+### flotation
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.784256 | 0.621921 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+
+### grinding
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4.242198 | 0.698710 | 0.018040 | 1.791752 | 0.936927 | 0.013072 | 0.504151 | 0.046145 | 0.066269 | 1.099435 | 0.074838 | 0.936269 |
+
+## C4_CONF_ROUTE_L2 (routing + base_reg l2_to_identity)
+
+### ETTm1
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.317112 | 0.357362 | 0.018145 | 1.789999 | 0.936071 | 0.014643 | 0.493920 | 0.082153 | 0.105575 | 0.916860 | 0.126411 | 0.878832 |
+
+### weather
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.172523 | 0.229049 | 0.018172 | 1.790935 | 0.852381 | 0.011343 | 0.501050 | 0.052521 | 0.075595 | 0.764476 | 0.127317 | 0.857235 |
+
+### flotation
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.784448 | 0.621991 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+
+### grinding
+
+| mse | mae | gate_mean | entropy_mean | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | map_std_mean | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4.243124 | 0.698810 | 0.018032 | 1.791526 | 0.926875 | 0.010037 | 0.494308 | 0.046225 | 0.066428 | 1.099435 | 0.074838 | 0.936269 |
