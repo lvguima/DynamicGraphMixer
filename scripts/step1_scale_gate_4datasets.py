@@ -1,0 +1,183 @@
+import subprocess
+import sys
+
+
+DATASETS = [
+    {
+        "name": "ETTm1",
+        "data": "ETTm1",
+        "data_path": "ETTm1.csv",
+        "freq": "t",
+        "enc_in": 7,
+        "dec_in": 7,
+        "c_out": 7,
+    },
+    {
+        "name": "weather",
+        "data": "custom",
+        "data_path": "weather.csv",
+        "freq": "t",
+        "enc_in": 21,
+        "dec_in": 21,
+        "c_out": 21,
+    },
+    {
+        "name": "flotation",
+        "data": "custom",
+        "data_path": "flotation.csv",
+        "freq": "t",
+        "enc_in": 12,
+        "dec_in": 12,
+        "c_out": 12,
+    },
+    {
+        "name": "grinding",
+        "data": "custom",
+        "data_path": "grinding.csv",
+        "freq": "t",
+        "enc_in": 12,
+        "dec_in": 12,
+        "c_out": 12,
+    },
+]
+
+COMMON = [
+    "--task_name",
+    "long_term_forecast",
+    "--is_training",
+    "1",
+    "--model",
+    "DynamicGraphMixer",
+    "--root_path",
+    "./datasets",
+    "--features",
+    "M",
+    "--target",
+    "OT",
+    "--seq_len",
+    "96",
+    "--label_len",
+    "48",
+    "--pred_len",
+    "96",
+    "--e_layers",
+    "2",
+    "--d_model",
+    "128",
+    "--d_ff",
+    "256",
+    "--batch_size",
+    "64",
+    "--train_epochs",
+    "15",
+    "--patience",
+    "3",
+    "--use_norm",
+    "1",
+    "--temporal_encoder",
+    "tcn",
+    "--tcn_kernel",
+    "3",
+    "--tcn_dilation",
+    "2",
+    "--graph_rank",
+    "8",
+    "--graph_smooth_lambda",
+    "0",
+    "--adj_sparsify",
+    "topk",
+    "--adj_topk",
+    "6",
+    "--graph_base_mode",
+    "mix",
+    "--graph_base_alpha_init",
+    "-8",
+    "--graph_base_l1",
+    "0.001",
+    "--gate_mode",
+    "per_var",
+    "--graph_map_norm",
+    "ma_detrend",
+    "--graph_map_window",
+    "16",
+    "--decomp_mode",
+    "ema",
+    "--decomp_alpha",
+    "0.1",
+    "--trend_head",
+    "linear",
+    "--trend_head_share",
+    "1",
+    "--graph_log_interval",
+    "200",
+    "--graph_log_topk",
+    "5",
+    "--graph_log_num_segments",
+    "2",
+    "--graph_log_dir",
+    "./graph_logs",
+]
+
+EXPS = [
+    {
+        "name": "F1_S16_Gm6",
+        "graph_scale": 16,
+        "gate_init": -6,
+        "datasets": "all",
+    },
+    {
+        "name": "F2_S16_Gm2",
+        "graph_scale": 16,
+        "gate_init": -2,
+        "datasets": "all",
+    },
+    {
+        "name": "F1b_S4_Gm6",
+        "graph_scale": 4,
+        "gate_init": -6,
+        "datasets": ["ETTm1"],
+    },
+]
+
+
+def run_one(cfg, exp):
+    model_id = f"DGmix_S1_{cfg['name']}_96_96_{exp['name']}"
+    log_id = f"{cfg['name']}_S1_{exp['name']}"
+    args = [
+        sys.executable,
+        "-u",
+        "run.py",
+        "--model_id",
+        model_id,
+        "--graph_log_exp_id",
+        log_id,
+        "--data",
+        cfg["data"],
+        "--data_path",
+        cfg["data_path"],
+        "--freq",
+        cfg["freq"],
+        "--enc_in",
+        str(cfg["enc_in"]),
+        "--dec_in",
+        str(cfg["dec_in"]),
+        "--c_out",
+        str(cfg["c_out"]),
+        "--graph_scale",
+        str(exp["graph_scale"]),
+        "--gate_init",
+        str(exp["gate_init"]),
+    ]
+    args += COMMON
+    print("Running", cfg["name"], exp["name"])
+    subprocess.run(args, check=True)
+
+
+if __name__ == "__main__":
+    for exp in EXPS:
+        if exp["datasets"] == "all":
+            targets = DATASETS
+        else:
+            targets = [d for d in DATASETS if d["name"] in exp["datasets"]]
+        for cfg in targets:
+            run_one(cfg, exp)
