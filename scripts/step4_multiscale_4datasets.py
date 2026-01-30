@@ -1,0 +1,191 @@
+import subprocess
+import sys
+
+
+DATASETS = [
+    {
+        "name": "ETTm1",
+        "data": "ETTm1",
+        "data_path": "ETTm1.csv",
+        "freq": "t",
+        "enc_in": 7,
+        "dec_in": 7,
+        "c_out": 7,
+    },
+    {
+        "name": "weather",
+        "data": "custom",
+        "data_path": "weather.csv",
+        "freq": "t",
+        "enc_in": 21,
+        "dec_in": 21,
+        "c_out": 21,
+    },
+    {
+        "name": "flotation",
+        "data": "custom",
+        "data_path": "flotation.csv",
+        "freq": "t",
+        "enc_in": 12,
+        "dec_in": 12,
+        "c_out": 12,
+    },
+    {
+        "name": "grinding",
+        "data": "custom",
+        "data_path": "grinding.csv",
+        "freq": "t",
+        "enc_in": 12,
+        "dec_in": 12,
+        "c_out": 12,
+    },
+]
+
+COMMON = [
+    "--task_name",
+    "long_term_forecast",
+    "--is_training",
+    "1",
+    "--model",
+    "DynamicGraphMixer",
+    "--root_path",
+    "./datasets",
+    "--features",
+    "M",
+    "--target",
+    "OT",
+    "--seq_len",
+    "96",
+    "--label_len",
+    "48",
+    "--pred_len",
+    "96",
+    "--e_layers",
+    "2",
+    "--d_model",
+    "128",
+    "--d_ff",
+    "256",
+    "--batch_size",
+    "64",
+    "--train_epochs",
+    "15",
+    "--patience",
+    "3",
+    "--use_norm",
+    "1",
+    "--temporal_encoder",
+    "tcn",
+    "--tcn_kernel",
+    "3",
+    "--tcn_dilation",
+    "2",
+    "--graph_rank",
+    "8",
+    "--graph_scale",
+    "16",
+    "--adj_sparsify",
+    "topk",
+    "--adj_topk",
+    "6",
+    "--graph_base_mode",
+    "mix",
+    "--graph_base_alpha_init",
+    "-8",
+    "--graph_base_l1",
+    "0.001",
+    "--graph_base_reg_type",
+    "l1",
+    "--gate_mode",
+    "per_var",
+    "--gate_init",
+    "-6",
+    "--graph_map_norm",
+    "ma_detrend",
+    "--graph_map_window",
+    "16",
+    "--decomp_mode",
+    "ema",
+    "--decomp_alpha",
+    "0.1",
+    "--trend_head",
+    "linear",
+    "--trend_head_share",
+    "1",
+    "--graph_log_interval",
+    "200",
+    "--graph_log_topk",
+    "5",
+    "--graph_log_num_segments",
+    "2",
+    "--graph_log_dir",
+    "./graph_logs",
+]
+
+EXPS = [
+    {
+        "name": "MS0_SINGLE_S16",
+        "extra": [
+            "--graph_scale_mode",
+            "single",
+        ],
+    },
+    {
+        "name": "MS1_MULTI_MEAN_4_8_16",
+        "extra": [
+            "--graph_scale_mode",
+            "multi",
+            "--graph_scale_list",
+            "4,8,16",
+            "--graph_scale_fuse",
+            "mean",
+        ],
+    },
+    {
+        "name": "MS2_MULTI_SOFTMAX_4_8_16",
+        "extra": [
+            "--graph_scale_mode",
+            "multi",
+            "--graph_scale_list",
+            "4,8,16",
+            "--graph_scale_fuse",
+            "softmax",
+        ],
+    },
+]
+
+
+def run_one(cfg, exp):
+    model_id = f"DGmix_S4_{cfg['name']}_96_96_{exp['name']}"
+    log_id = f"{cfg['name']}_S4_{exp['name']}"
+    args = [
+        sys.executable,
+        "-u",
+        "run.py",
+        "--model_id",
+        model_id,
+        "--graph_log_exp_id",
+        log_id,
+        "--data",
+        cfg["data"],
+        "--data_path",
+        cfg["data_path"],
+        "--freq",
+        cfg["freq"],
+        "--enc_in",
+        str(cfg["enc_in"]),
+        "--dec_in",
+        str(cfg["dec_in"]),
+        "--c_out",
+        str(cfg["c_out"]),
+    ]
+    args += COMMON
+    args += exp["extra"]
+    print("Running", cfg["name"], exp["name"])
+    subprocess.run(args, check=True)
+
+
+if __name__ == "__main__":
+    for exp in EXPS:
+        for cfg in DATASETS:
+            run_one(cfg, exp)

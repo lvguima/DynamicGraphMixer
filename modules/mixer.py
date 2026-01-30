@@ -85,7 +85,7 @@ class GraphMixer(nn.Module):
             gate = gate.view(gate.shape[0], 1, 1, 1)
         return gate
 
-    def forward(self, adj, x, token_offset=0, conf=None, force_gate_zero=False):
+    def forward(self, adj, x, token_offset=0, conf=None, force_gate_zero=False, record_gate=True):
         # adj: [B, C, C], x: [B, C, T, D]
         mixed = torch.einsum("bij,bjtd->bitd", adj, x)
         gate = None
@@ -102,5 +102,6 @@ class GraphMixer(nn.Module):
         if gate is not None:
             mixed = mixed * gate
         mixed = self.dropout(mixed)
-        self.last_gate = gate.detach() if gate is not None else None
+        if record_gate:
+            self.last_gate = gate.detach() if gate is not None else None
         return x + mixed

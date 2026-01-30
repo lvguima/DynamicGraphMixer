@@ -175,6 +175,12 @@ if __name__ == '__main__':
     parser.add_argument('--temporal_encoder', type=str, default='tcn',
                         help='temporal encoder for DynamicGraphMixer: tcn or linear')
     parser.add_argument('--graph_scale', type=int, default=1, help='coarse segment length for dynamic graph')
+    parser.add_argument('--graph_scale_mode', type=str, default='single',
+                        help='graph scale mode: single or multi')
+    parser.add_argument('--graph_scale_list', type=str, default='4,8,16',
+                        help='comma-separated scales for multi-scale graph')
+    parser.add_argument('--graph_scale_fuse', type=str, default='mean',
+                        help='multi-scale fusion: mean or softmax')
     parser.add_argument('--graph_rank', type=int, default=8, help='low-rank size for dynamic graph')
     parser.add_argument('--graph_smooth_lambda', type=float, default=0.0,
                         help='[Deprecated] graph smoothness removed (must be 0)')

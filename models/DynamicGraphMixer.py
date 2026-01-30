@@ -46,6 +46,31 @@ class Model(nn.Module):
         self.c_out = configs.c_out
 
         self.graph_scale = max(1, int(getattr(configs, "graph_scale", 1)))
+        self.graph_scale_mode = str(getattr(configs, "graph_scale_mode", "single")).lower()
+        raw_scale_list = getattr(configs, "graph_scale_list", "")
+        if self.graph_scale_mode not in ("single", "multi"):
+            raise ValueError(f"Unsupported graph_scale_mode: {self.graph_scale_mode}")
+        self.graph_scales = []
+        if raw_scale_list is not None:
+            if isinstance(raw_scale_list, (list, tuple)):
+                self.graph_scales = [int(x) for x in raw_scale_list if int(x) > 0]
+            else:
+                text = str(raw_scale_list).strip()
+                if text:
+                    scales = []
+                    for item in text.split(","):
+                        item = str(item).strip()
+                        if not item:
+                            continue
+                        val = int(item)
+                        if val > 0:
+                            scales.append(val)
+                    self.graph_scales = scales
+        if not self.graph_scales:
+            self.graph_scales = [self.graph_scale]
+        self.graph_scale_fuse = str(getattr(configs, "graph_scale_fuse", "mean")).lower()
+        if self.graph_scale_fuse not in ("mean", "softmax"):
+            raise ValueError(f"Unsupported graph_scale_fuse: {self.graph_scale_fuse}")
         self.graph_rank = int(getattr(configs, "graph_rank", 8))
         self.graph_map_norm = str(getattr(configs, "graph_map_norm", "none")).lower()
         self.graph_map_window = int(getattr(configs, "graph_map_window", 16))
@@ -163,6 +188,10 @@ class Model(nn.Module):
             conf_w_init=self.gate_conf_w_init,
             conf_b_init=self.gate_conf_b_init,
         )
+        self.scale_fuse_logits = None
+        if self.graph_scale_mode == "multi" and len(self.graph_scales) > 1:
+            if self.graph_scale_fuse == "softmax":
+                self.scale_fuse_logits = nn.Parameter(torch.zeros(len(self.graph_scales)))
         self.head = ForecastHead(
             d_model=configs.d_model,
             num_tokens=self.num_tokens,
@@ -223,7 +252,7 @@ class Model(nn.Module):
         denom = masked.sum(dim=-1, keepdim=True).clamp_min(1e-12)
         return masked / denom
 
-    def _mix_segments(self, h_time, h_graph=None, h_value=None):
+    def _mix_segments(self, h_time, h_graph=None, h_value=None, scale_override=None, log_output=True):
         # h_time: [B, C, N, D], h_graph provides map features for adjacency
         # h_value: [B, C, N, Dv] values to be mixed (defaults to h_time)
         if h_graph is None:
@@ -231,7 +260,8 @@ class Model(nn.Module):
         if h_value is None:
             h_value = h_time
         bsz, n_vars, num_tokens, dim = h_time.shape
-        scale = min(self.graph_scale, num_tokens)
+        scale = int(scale_override) if scale_override is not None else self.graph_scale
+        scale = min(max(1, scale), num_tokens)
 
         base_adj = None
         base_reg = None
@@ -250,12 +280,13 @@ class Model(nn.Module):
 
         segments = []
         prev_adj = None
-        log_adjs = [] if self.graph_log else None
-        log_raw_adjs = [] if self.graph_log else None
-        log_alphas = [] if self.graph_log else None
-        if self.graph_log and base_adj is not None:
+        do_log = bool(self.graph_log and log_output)
+        log_adjs = [] if do_log else None
+        log_raw_adjs = [] if do_log else None
+        log_alphas = [] if do_log else None
+        if do_log and base_adj is not None:
             self.last_graph_base_adj = base_adj_single.detach().cpu()
-        elif self.graph_log:
+        elif do_log:
             self.last_graph_base_adj = None
         for start in range(0, num_tokens, scale):
             end = min(start + scale, num_tokens)
@@ -299,25 +330,59 @@ class Model(nn.Module):
                 token_offset=start,
                 conf=conf_gate,
                 force_gate_zero=self._in_warmup(),
+                record_gate=do_log,
             )
             segments.append(h_seg)
         h_mix = torch.cat(segments, dim=2)
         if base_reg is None:
             base_reg = h_time.new_tensor(0.0)
         self.graph_base_reg_loss = base_reg
-        if log_adjs is not None:
+        if do_log:
             self.last_graph_adjs = log_adjs
             self.last_graph_raw_adjs = log_raw_adjs
             if log_alphas:
                 self.last_graph_alpha = torch.stack(log_alphas, dim=0).mean(dim=0)
             else:
                 self.last_graph_alpha = None
-        else:
-            self.last_graph_adjs = None
-            self.last_graph_raw_adjs = None
-            self.last_graph_base_adj = None
-            self.last_graph_alpha = None
-        return h_mix, None
+        return h_mix, base_reg
+
+    def _fuse_scales(self, mixes):
+        if len(mixes) == 1:
+            return mixes[0]
+        if self.graph_scale_fuse == "mean":
+            return sum(mixes) / float(len(mixes))
+        if self.graph_scale_fuse == "softmax":
+            if self.scale_fuse_logits is None:
+                raise ValueError("scale_fuse_logits is not initialized for softmax fusion")
+            weights = torch.softmax(self.scale_fuse_logits, dim=0)
+            fused = mixes[0] * weights[0]
+            for idx in range(1, len(mixes)):
+                fused = fused + mixes[idx] * weights[idx]
+            return fused
+        raise ValueError(f"Unsupported graph_scale_fuse: {self.graph_scale_fuse}")
+
+    def _mix_multi_scale(self, h_time, h_graph=None, h_value=None):
+        if self.graph_scale_mode != "multi" or len(self.graph_scales) <= 1:
+            h_mix, base_reg = self._mix_segments(
+                h_time, h_graph, h_value, scale_override=self.graph_scale, log_output=self.graph_log
+            )
+            self.graph_base_reg_loss = base_reg
+            return h_mix
+
+        mixes = []
+        base_regs = []
+        for idx, scale in enumerate(self.graph_scales):
+            log_output = self.graph_log and idx == 0
+            h_mix, base_reg = self._mix_segments(
+                h_time, h_graph, h_value, scale_override=scale, log_output=log_output
+            )
+            mixes.append(h_mix)
+            if base_reg is not None:
+                base_regs.append(base_reg)
+        self.graph_base_reg_loss = (
+            sum(base_regs) / float(len(base_regs)) if base_regs else h_time.new_tensor(0.0)
+        )
+        return self._fuse_scales(mixes)
 
     def _ema_decompose(self, x_enc):
         # x_enc: [B, L, C]
@@ -347,7 +412,7 @@ class Model(nn.Module):
         else:
             self.last_graph_map_mean_abs = None
             self.last_graph_map_std_mean = None
-        h_mix, _ = self._mix_segments(h_time, h_map)
+        h_mix = self._mix_multi_scale(h_time, h_map, h_value=None)
 
         if self.c_out < h_mix.shape[1]:
             h_mix = h_mix[:, -self.c_out:, :, :]
@@ -371,7 +436,7 @@ class Model(nn.Module):
         if self.trend_graph_map_detach and h_map is not None:
             h_map = h_map.detach()
         x_value = x_trend.permute(0, 2, 1).contiguous().unsqueeze(-1)
-        h_mix, _ = self._mix_segments(h_time, h_map, h_value=x_value)
+        h_mix = self._mix_multi_scale(h_time, h_map, h_value=x_value)
         mixed = h_mix.squeeze(-1).permute(0, 2, 1).contiguous()
         return self._forecast_trend_head(mixed)
 
