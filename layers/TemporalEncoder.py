@@ -1,8 +1,5 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.Embed import PositionalEmbedding
-from layers.Transformer_EncDec import Encoder, EncoderLayer
 
 
 class CausalConv1d(nn.Module):
@@ -63,42 +60,15 @@ class TemporalEncoderTCN(nn.Module):
         return out
 
 
-class TemporalEncoderTransformer(nn.Module):
-    def __init__(self, d_model, n_heads, num_layers, d_ff, dropout, activation="gelu",
-                 attn_factor=1):
+class TemporalEncoderLinear(nn.Module):
+    def __init__(self, d_model):
         super().__init__()
-        self.in_proj = nn.Linear(1, d_model)
-        self.position_embedding = PositionalEmbedding(d_model)
-        self.dropout = nn.Dropout(dropout)
-
-        from layers.SelfAttention_Family import FullAttention, AttentionLayer
-
-        self.encoder = Encoder(
-            [
-                EncoderLayer(
-                    AttentionLayer(
-                        FullAttention(False, attn_factor, attention_dropout=dropout,
-                                      output_attention=False),
-                        d_model, n_heads
-                    ),
-                    d_model,
-                    d_ff,
-                    dropout=dropout,
-                    activation=activation,
-                )
-                for _ in range(num_layers)
-            ],
-            norm_layer=nn.LayerNorm(d_model),
-        )
+        self.proj = nn.Linear(1, d_model)
 
     def forward(self, x):
         # x: [B, L, C]
         bsz, seq_len, n_vars = x.shape
         x = x.permute(0, 2, 1).contiguous().reshape(bsz * n_vars, seq_len, 1)
-        x = self.in_proj(x)
-        x = x + self.position_embedding(x)
-        x = self.dropout(x)
-
-        x, _ = self.encoder(x, attn_mask=None)
-        x = x.reshape(bsz, n_vars, x.shape[1], -1)
-        return x
+        out = self.proj(x)
+        out = out.reshape(bsz, n_vars, seq_len, -1)
+        return out

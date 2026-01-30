@@ -84,10 +84,6 @@ class Exp_Long_Term_Forecast(Exp_Basic):
     def _get_graph_reg_loss(self):
         model_ref = self.model.module if isinstance(self.model, nn.DataParallel) else self.model
         total = 0.0
-        if hasattr(self.args, "graph_smooth_lambda") and self.args.graph_smooth_lambda > 0:
-            graph_reg = getattr(model_ref, "graph_reg_loss", None)
-            if graph_reg is not None:
-                total = total + graph_reg * self.args.graph_smooth_lambda
         if hasattr(self.args, "graph_base_l1") and self.args.graph_base_l1 > 0:
             base_reg = getattr(model_ref, "graph_base_reg_loss", None)
             if base_reg is not None:

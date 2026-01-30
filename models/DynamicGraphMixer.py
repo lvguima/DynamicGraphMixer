@@ -1,13 +1,11 @@
 import torch
 import torch.nn as nn
 
-from modules.tokenizer import PatchTokenizer
 from modules.temporal import TemporalEncoderWrapper
 from modules.graph_learner import LowRankGraphLearner
 from modules.graph_map import GraphMapNormalizer
 from modules.mixer import GraphMixer
 from modules.head import ForecastHead
-from modules.stable_feat import StableFeature, StableFeatureToken
 
 
 class TrendHead(nn.Module):
@@ -48,7 +46,6 @@ class Model(nn.Module):
 
         self.graph_scale = max(1, int(getattr(configs, "graph_scale", 1)))
         self.graph_rank = int(getattr(configs, "graph_rank", 8))
-        self.graph_smooth_lambda = float(getattr(configs, "graph_smooth_lambda", 0.0))
         self.graph_map_norm = str(getattr(configs, "graph_map_norm", "none")).lower()
         self.graph_map_window = int(getattr(configs, "graph_map_window", 16))
         self.graph_map_alpha = float(getattr(configs, "graph_map_alpha", 0.3))
@@ -57,62 +54,32 @@ class Model(nn.Module):
         self.decomp_alpha = float(getattr(configs, "decomp_alpha", 0.3))
         self.trend_head_mode = str(getattr(configs, "trend_head", "none")).lower()
         self.trend_head_share = bool(int(getattr(configs, "trend_head_share", 1)))
+        self.trend_only = bool(getattr(configs, "trend_only", False))
         self.graph_base_mode = str(getattr(configs, "graph_base_mode", "none")).lower()
-        self.graph_base_alpha_init = float(getattr(configs, "graph_base_alpha_init", -8.0))
         self.graph_base_l1 = float(getattr(configs, "graph_base_l1", 0.0))
         self.adj_sparsify = str(getattr(configs, "adj_sparsify", "none")).lower()
-        self.adj_topk = int(getattr(configs, "adj_topk", 0))
         self.gate_mode = str(getattr(configs, "gate_mode", "none")).lower()
         self.gate_init = float(getattr(configs, "gate_init", -4.0))
-        self.graph_source = str(getattr(configs, "graph_source", "content_mean")).lower()
-        self.stable_level = str(getattr(configs, "stable_level", "point")).lower()
-        self.stable_feat_type = str(getattr(configs, "stable_feat_type", "none")).lower()
-        self.stable_share_encoder = bool(getattr(configs, "stable_share_encoder", False))
-        self.stable_detach = bool(getattr(configs, "stable_detach", False))
-        self.stable_window = int(getattr(configs, "stable_window", 3))
-        self.stable_token_window = int(getattr(configs, "stable_token_window", 0))
-        if self.stable_token_window <= 0:
-            self.stable_token_window = self.stable_window
-
-        self.use_patch = bool(getattr(configs, "use_patch", False))
-        self.patch_mode = str(getattr(configs, "patch_mode", "v1_encode_then_pool")).lower()
-        if self.patch_mode not in ["v1_encode_then_pool", "token_first"]:
-            raise ValueError(f"Unsupported patch_mode: {self.patch_mode}")
-        patch_len = int(getattr(configs, "patch_len", 16))
-        patch_stride = int(getattr(configs, "patch_stride", patch_len))
-        self.tokenizer = PatchTokenizer(
-            seq_len=self.seq_len,
-            use_patch=self.use_patch,
-            patch_len=patch_len,
-            patch_stride=patch_stride,
-        )
-        self.patch_len = self.tokenizer.patch_len
-        self.patch_stride = self.tokenizer.patch_stride
-        self.num_tokens = self.tokenizer.num_tokens
+        # Removed features: stable_stream graph source, patch/token pooling, and graph smoothness.
+        # Keep backward compatibility by validating deprecated args.
+        graph_source = str(getattr(configs, "graph_source", "content_mean")).lower()
+        if graph_source != "content_mean":
+            raise ValueError("graph_source=stable_stream is no longer supported (content_mean only).")
+        if bool(getattr(configs, "use_patch", False)):
+            raise ValueError("Patch/Token Pooling is no longer supported (use_patch must be false).")
+        graph_smooth = float(getattr(configs, "graph_smooth_lambda", 0.0))
+        if abs(graph_smooth) > 0:
+            raise ValueError("graph_smooth_lambda is deprecated and must be 0.")
+        adj_topk = int(getattr(configs, "adj_topk", 6))
+        if self.adj_sparsify == "topk" and adj_topk != 6:
+            raise ValueError("adj_topk is deprecated and fixed to 6.")
+        base_alpha_init = float(getattr(configs, "graph_base_alpha_init", -8.0))
+        if self.graph_base_mode == "mix" and base_alpha_init != -8.0:
+            raise ValueError("graph_base_alpha_init is deprecated and fixed to -8.")
+        self.adj_topk = 6
+        self.num_tokens = self.seq_len
 
         self.temporal_encoder = TemporalEncoderWrapper(configs)
-        self.stable_feat = None
-        self.stable_token_feat = None
-        self.stable_encoder = None
-        if self.graph_source == "stable_stream":
-            if self.stable_level == "token":
-                self.stable_token_feat = StableFeatureToken(
-                    feat_type=self.stable_feat_type,
-                    window=self.stable_token_window,
-                )
-            elif self.stable_level == "point":
-                self.stable_feat = StableFeature(
-                    feat_type=self.stable_feat_type,
-                    window=self.stable_window,
-                )
-                if self.stable_share_encoder:
-                    self.stable_encoder = self.temporal_encoder
-                else:
-                    self.stable_encoder = TemporalEncoderWrapper(configs)
-            else:
-                raise ValueError(f"Unsupported stable_level: {self.stable_level}")
-        elif self.graph_source != "content_mean":
-            raise ValueError(f"Unsupported graph_source: {self.graph_source}")
         self.graph_map = GraphMapNormalizer(
             mode=self.graph_map_norm,
             window=self.graph_map_window,
@@ -130,6 +97,9 @@ class Model(nn.Module):
                 num_vars=self.enc_in,
                 share=self.trend_head_share,
             )
+        if self.trend_only:
+            if self.decomp_mode != "ema" or self.trend_head is None:
+                raise ValueError("trend_only requires decomp_mode=ema and trend_head=linear.")
         self.graph_learner = LowRankGraphLearner(
             in_dim=configs.d_model,
             rank=self.graph_rank,
@@ -140,7 +110,7 @@ class Model(nn.Module):
         if self.graph_base_mode == "mix":
             self.graph_base_logits = nn.Parameter(torch.zeros(self.enc_in, self.enc_in))
             self.graph_base_alpha = nn.Parameter(
-                torch.tensor(self.graph_base_alpha_init, dtype=torch.float)
+                torch.tensor(-8.0, dtype=torch.float)
             )
         elif self.graph_base_mode != "none":
             raise ValueError(f"Unsupported graph_base_mode: {self.graph_base_mode}")
@@ -200,7 +170,6 @@ class Model(nn.Module):
                 base_reg = base_adj_single.abs().mean()
 
         segments = []
-        reg = None
         prev_adj = None
         log_adjs = [] if self.graph_log else None
         log_raw_adjs = [] if self.graph_log else None
@@ -219,17 +188,12 @@ class Model(nn.Module):
             if log_raw_adjs is not None:
                 log_raw_adjs.append(adj.detach().cpu())
             adj = self._sparsify_adj(adj)
-            if self.graph_smooth_lambda > 0 and prev_adj is not None:
-                reg_term = torch.mean(torch.abs(adj - prev_adj))
-                reg = reg_term if reg is None else reg + reg_term
             prev_adj = adj
             if log_adjs is not None:
                 log_adjs.append(adj.detach().cpu())
             h_seg = self.graph_mixer(adj, h_seg, token_offset=start)
             segments.append(h_seg)
         h_mix = torch.cat(segments, dim=2)
-        if reg is None:
-            reg = h_time.new_tensor(0.0)
         if base_reg is None:
             base_reg = h_time.new_tensor(0.0)
         self.graph_base_reg_loss = base_reg
@@ -240,36 +204,7 @@ class Model(nn.Module):
             self.last_graph_adjs = None
             self.last_graph_raw_adjs = None
             self.last_graph_base_adj = None
-        return h_mix, reg
-
-    def _select_graph_tokens(self, x_enc, h_time):
-        if self.graph_source != "stable_stream":
-            return h_time
-        if self.stable_level == "token":
-            if self.stable_token_feat is None:
-                return h_time
-            h_stable = self.stable_token_feat(h_time)
-            if self.stable_detach:
-                h_stable = h_stable.detach()
-            return h_stable
-        if self.stable_feat is None or self.stable_encoder is None:
-            return h_time
-        x_stable = self.stable_feat(x_enc)
-        h_stable = self._encode_with_patch_mode(x_stable, self.stable_encoder)
-        if self.stable_detach:
-            h_stable = h_stable.detach()
-        return h_stable
-
-    def _apply_patch_pooling(self, h_time):
-        # h_time: [B, C, L, D]
-        return self.tokenizer(h_time)
-
-    def _apply_patch_pooling_input(self, x_enc):
-        # x_enc: [B, L, C]
-        x = x_enc.permute(0, 2, 1).unsqueeze(-1)
-        x = self.tokenizer(x)
-        x = x.squeeze(-1).permute(0, 2, 1).contiguous()
-        return x
+        return h_mix, None
 
     def _ema_decompose(self, x_enc):
         # x_enc: [B, L, C]
@@ -288,8 +223,8 @@ class Model(nn.Module):
         return trend, season
 
     def _forecast_graph(self, x_enc):
-        h_time = self._encode_with_patch_mode(x_enc, self.temporal_encoder)
-        h_graph = self._select_graph_tokens(x_enc, h_time)
+        h_time = self.temporal_encoder(x_enc)
+        h_graph = h_time
         h_map = self.graph_map(h_graph)
         if self.graph_map_detach and h_map is not None:
             h_map = h_map.detach()
@@ -299,8 +234,7 @@ class Model(nn.Module):
         else:
             self.last_graph_map_mean_abs = None
             self.last_graph_map_std_mean = None
-        h_mix, reg = self._mix_segments(h_time, h_map)
-        self.graph_reg_loss = reg
+        h_mix, _ = self._mix_segments(h_time, h_map)
 
         if self.c_out < h_mix.shape[1]:
             h_mix = h_mix[:, -self.c_out:, :, :]
@@ -315,13 +249,6 @@ class Model(nn.Module):
             out = out[:, :, -self.c_out:]
         return out
 
-    def _encode_with_patch_mode(self, x_enc, encoder):
-        if self.patch_mode == "token_first":
-            x_enc = self._apply_patch_pooling_input(x_enc)
-            return encoder(x_enc)
-        h_time = encoder(x_enc)
-        return self._apply_patch_pooling(h_time)
-
     def forecast(self, x_enc):
         if self.decomp_mode == "ema":
             x_trend, x_season = self._ema_decompose(x_enc)
@@ -333,6 +260,8 @@ class Model(nn.Module):
                 self.last_decomp_energy = (trend_energy, season_energy, ratio)
             else:
                 self.last_decomp_energy = None
+            if self.trend_only:
+                return self._forecast_trend(x_trend)
             season_out = self._forecast_graph(x_season)
             trend_out = self._forecast_trend(x_trend)
             return season_out + trend_out

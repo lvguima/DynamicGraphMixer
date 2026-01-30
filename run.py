@@ -147,11 +147,13 @@ if __name__ == '__main__':
     parser.add_argument('--extra_tag', type=str, default="", help="Anything extra")
 
     # TimeXer
-    parser.add_argument('--patch_len', type=int, default=16, help='patch length')
-    parser.add_argument('--patch_stride', type=int, default=0, help='patch stride (0 uses patch_len)')
-    parser.add_argument('--use_patch', action='store_true', default=False, help='use patch pooling in DynamicGraphMixer')
+    parser.add_argument('--patch_len', type=int, default=16, help='[Deprecated] patch length (removed)')
+    parser.add_argument('--patch_stride', type=int, default=0,
+                        help='[Deprecated] patch stride (removed)')
+    parser.add_argument('--use_patch', action='store_true', default=False,
+                        help='[Deprecated] Patch pooling removed from DynamicGraphMixer')
     parser.add_argument('--patch_mode', type=str, default='v1_encode_then_pool',
-                        help='patch path: v1_encode_then_pool or token_first')
+                        help='[Deprecated] patch path (removed)')
 
     # GCN
     parser.add_argument('--node_dim', type=int, default=10, help='each node embbed to dim dimentions')
@@ -171,10 +173,11 @@ if __name__ == '__main__':
 
     # DynamicGraphMixer
     parser.add_argument('--temporal_encoder', type=str, default='tcn',
-                        help='temporal encoder for DynamicGraphMixer: tcn or transformer')
+                        help='temporal encoder for DynamicGraphMixer: tcn or linear')
     parser.add_argument('--graph_scale', type=int, default=1, help='coarse segment length for dynamic graph')
     parser.add_argument('--graph_rank', type=int, default=8, help='low-rank size for dynamic graph')
-    parser.add_argument('--graph_smooth_lambda', type=float, default=0.0, help='graph smoothness weight')
+    parser.add_argument('--graph_smooth_lambda', type=float, default=0.0,
+                        help='[Deprecated] graph smoothness removed (must be 0)')
     parser.add_argument('--graph_map_norm', type=str, default='none',
                         help='graph map normalization: none, ma_detrend, diff1, ema_detrend')
     parser.add_argument('--graph_map_window', type=int, default=16,
@@ -191,16 +194,18 @@ if __name__ == '__main__':
                         help='trend head: none or linear')
     parser.add_argument('--trend_head_share', type=int, default=1,
                         help='share trend head across variables (1 yes, 0 no)')
+    parser.add_argument('--trend_only', action='store_true', default=False,
+                        help='use only trend branch for prediction (requires decomp_mode=ema and trend_head=linear)')
     parser.add_argument('--graph_base_mode', type=str, default='none',
                         help='base graph mode: none or mix')
     parser.add_argument('--graph_base_alpha_init', type=float, default=-8.0,
-                        help='initial logit for base mixing alpha (sigmoid)')
+                        help='[Deprecated] base alpha init fixed to -8')
     parser.add_argument('--graph_base_l1', type=float, default=0.0,
                         help='L1 regularization weight for base adjacency')
     parser.add_argument('--adj_sparsify', type=str, default='none',
                         help='adjacency sparsify mode: none or topk')
     parser.add_argument('--adj_topk', type=int, default=0,
-                        help='top-k for adjacency sparsify (0 disables)')
+                        help='[Deprecated] adj_topk fixed to 6 when adj_sparsify=topk')
     parser.add_argument('--gate_mode', type=str, default='none',
                         help='graph mixing gate: none, scalar, per_var, per_token')
     parser.add_argument('--gate_init', type=float, default=-4.0,
@@ -208,19 +213,19 @@ if __name__ == '__main__':
     parser.add_argument('--tcn_kernel', type=int, default=3, help='kernel size for temporal TCN')
     parser.add_argument('--tcn_dilation', type=int, default=2, help='dilation base for temporal TCN')
     parser.add_argument('--graph_source', type=str, default='content_mean',
-                        help='graph source: content_mean or stable_stream')
+                        help='[Deprecated] graph_source fixed to content_mean')
     parser.add_argument('--stable_level', type=str, default='point',
-                        help='stable level: point or token')
+                        help='[Deprecated] stable_stream removed')
     parser.add_argument('--stable_feat_type', type=str, default='none',
-                        help='stable feature type: none, detrend, diff')
+                        help='[Deprecated] stable_stream removed')
     parser.add_argument('--stable_window', type=int, default=3,
-                        help='window size for stable detrend')
+                        help='[Deprecated] stable_stream removed')
     parser.add_argument('--stable_token_window', type=int, default=0,
-                        help='token-level stable window (0 uses stable_window)')
+                        help='[Deprecated] stable_stream removed')
     parser.add_argument('--stable_share_encoder', action='store_true', default=False,
-                        help='share temporal encoder between content and stable stream')
+                        help='[Deprecated] stable_stream removed')
     parser.add_argument('--stable_detach', action='store_true', default=False,
-                        help='detach stable stream from gradient flow')
+                        help='[Deprecated] stable_stream removed')
 
     # DynamicGraphMixer logging
     parser.add_argument('--graph_log_exp_id', type=str, default='',

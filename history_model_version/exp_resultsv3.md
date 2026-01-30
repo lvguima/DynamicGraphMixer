@@ -1,0 +1,91 @@
+# exp_resultsv3 (template)
+
+> 约定：单 seed 即可（用户要求不做 multi-seeds）。  
+> 指标：MSE / MAE（与 v2 对齐），并记录 gate/alpha/entropy 等图统计用于诊断。
+
+锚点：python -u run.py --task_name long_term_forecast --is_training 1 --model_id DynamicGraphMixer_TCN_ETTm1_96_96 --model DynamicGraphMixer --data ETTm1 --root_path ./datasets --data_path ETTm1.csv --features M --target OT --freq t --seq_len 96 --label_len 48 --pred_len 96 --e_layers 2 --d_model 128 --d_ff 256 
+--enc_in 7 --dec_in 7 --c_out 7 --batch_size 64 --train_epochs 15 --patience 3 --use_norm 1 --graph_scale 4 --graph_rank 8 --graph_smooth_lambda 0 --temporal_encoder tcn --tcn_kernel 3 --tcn_dilation 2 --graph_log_interval 200 --graph_log_topk 5 --graph_log_num_segments 2 --graph_log_dir ./graph_logs --graph_log_exp_id E0-1 --graph_source content_mean --stable_level point --stable_feat_type detrend --stable_window 16 --graph_base_mode mix --graph_base_alpha_init -8 --graph_base_l1 0.001 --gate_mode scalar --gate_init -4 --adj_sparsify topk --adj_topk 4
+
+mse:0.3333682119846344, mae:0.36996880173683167
+
+---
+
+## Common Setup
+- task: long_term_forecast
+- seq_len / pred_len: 96 / 96（先对齐快速实验）
+- 训练超参：尽量与 v2 best 对齐
+- 记录：MSE, MAE, gate_mean, alpha_mean, ent, overlap, adj_diff
+
+---
+
+## Table Columns
+| ExpID | Dataset | seq→pred | Variant | Key Args | MSE | MAE | gate_mean | alpha_mean | ent | overlap | adj_diff | Notes |
+|---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+
+---
+
+## Step-A: SMGP (Stationary-Map Graph)
+
+| ExpID | Dataset | seq→pred | Variant | Key Args | MSE | MAE | gate_mean | alpha_mean | ent | overlap | adj_diff | Notes |
+|---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| F0 | ETTm1 | 96→96 | v2_best | gate=per_var(-6), graph_scale=8 | 0.333418 | 0.369808 | 0.002545 | 0.000312 | 1.177287 | 0.891315 | 0.126304 | baseline |
+| F1 | ETTm1 | 96→96 | SMGP | ema_detrend alpha=0.1 | 0.333550 | 0.369766 | 0.002520 | 0.000329 | 1.554796 | 0.868588 | 0.096559 | slightly worse vs F0 |
+| F1 | ETTm1 | 96→96 | SMGP | ema_detrend alpha=0.3 | 0.333121 | 0.369539 | 0.002512 | 0.000333 | 1.737902 | 0.856331 | 0.064133 | best among ETTm1 SMGP |
+| F1 | ETTm1 | 96→96 | SMGP | ema_detrend alpha=0.5 | 0.333334 | 0.369575 | 0.002506 | 0.000336 | 1.790040 | 0.855235 | 0.039008 | small gain, more smoothing |
+| F1 | ETTm1 | 96→96 | SMGP | diff1 | 0.333347 | 0.369688 | 0.002503 | 0.000336 | 1.790132 | 0.853774 | 0.039205 | similar to ema a0.5 |
+| F1 | ETTm1 | 96→96 | SMGP | ma_detrend window=16 | 0.332923 | 0.369483 | 0.002509 | 0.000335 | 1.778012 | 0.860390 | 0.046645 | best overall on ETTm1 |
+| F1 | Weather | 96→96 | SMGP | ema_detrend alpha=0.1 | 0.182167 | 0.240396 | 0.002545 | 0.000336 | 1.791359 | 0.438799 | 0.051301 | best on Weather |
+| F1 | Weather | 96→96 | SMGP | ema_detrend alpha=0.3 | 0.182395 | 0.240501 | 0.002565 | 0.000336 | 1.791755 | 0.341274 | 0.059749 | slightly worse |
+| F1 | Weather | 96→96 | SMGP | ema_detrend alpha=0.5 | 0.182253 | 0.240390 | 0.002569 | 0.000336 | 1.791759 | 0.330141 | 0.060793 | similar to a0.1 |
+| F1 | Weather | 96→96 | SMGP | diff1 | 0.182353 | 0.240450 | 0.002567 | 0.000336 | 1.791759 | 0.311418 | 0.062492 | worst overlap |
+| F1 | Weather | 96→96 | SMGP | ma_detrend window=16 | 0.182485 | 0.240459 | 0.002591 | 0.000336 | 1.791755 | 0.348945 | 0.059308 | slightly worse |
+| F0 | Traffic | 96→96 | v2_best | (copy v2 best args) |  |  |  |  |  |  |  | baseline |
+| F1 | Traffic | 96→96 | SMGP | graph_map_norm=ema_detrend, graph_map_alpha=0.3 |  |  |  |  |  |  |  |  |
+
+### (Optional) Stronger propagation
+| ExpID | Dataset | seq→pred | Variant | Key Args | MSE | MAE | gate_mean | alpha_mean | ent | overlap | adj_diff | Notes |
+|---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| F2 | ETTm1 | 96→96 | SMGP+strong_gate | F1 + gate_init=-2 | 0.336202 | 0.374268 | 0.114171 | 0.000370 | 1.750082 | 0.845495 | 0.057989 | worse on ETTm1 (gate too strong) |
+
+---
+
+## Step-B (Optional): Dual-Stream EMA
+
+| ExpID | Dataset | seq→pred | Variant | Key Args | MSE | MAE | gate_mean | alpha_mean | ent | overlap | adj_diff | Notes |
+| F3 | ETTm1 | 96?96 | DualStream+SMGP | decomp_alpha=0.1, share=1 + ma_detrend(16) | 0.317572 | 0.357874 | 0.002445 | 0.000335 | 1.790193 | 0.858685 | 0.038126 | best among share=1 |
+| F3 | ETTm1 | 96?96 | DualStream+SMGP | decomp_alpha=0.2, share=1 + ma_detrend(16) | 0.322738 | 0.359730 | 0.002454 | 0.000333 | 1.766823 | 0.855154 | 0.047645 | trend ratio?0.943 |
+| F3 | ETTm1 | 96?96 | DualStream+SMGP | decomp_alpha=0.3, share=1 + ma_detrend(16) | 0.327053 | 0.362687 | 0.002468 | 0.000329 | 1.733516 | 0.857427 | 0.055508 | trend ratio?0.967 |
+| F3 | ETTm1 | 96?96 | DualStream+SMGP | decomp_alpha=0.1, share=0 + ma_detrend(16) | 0.323628 | 0.365772 | 0.002418 | 0.000333 | 1.763939 | 0.864529 | 0.050150 | share=0 worse |
+| F3 | ETTm1 | 96?96 | DualStream+SMGP | decomp_alpha=0.2, share=0 + ma_detrend(16) | 0.327864 | 0.367715 | 0.002407 | 0.000334 | 1.777316 | 0.860674 | 0.046016 | share=0 worse |
+| F3 | ETTm1 | 96?96 | DualStream+SMGP | decomp_alpha=0.3, share=0 + ma_detrend(16) | 0.334566 | 0.371023 | 0.002422 | 0.000334 | 1.788958 | 0.855073 | 0.037752 | share=0 much worse |
+| F3 | Weather | 96?96 | DualStream+SMGP | decomp_alpha=0.1, share=1 + ema_detrend(0.1) | 0.172784 | 0.230148 | 0.002487 | 0.000336 | 1.791757 | 0.345089 | 0.059626 | best among share=1 |
+| F3 | Weather | 96?96 | DualStream+SMGP | decomp_alpha=0.2, share=1 + ema_detrend(0.1) | 0.174666 | 0.232466 | 0.002504 | 0.000335 | 1.791743 | 0.285823 | 0.064900 | worse |
+| F3 | Weather | 96?96 | DualStream+SMGP | decomp_alpha=0.3, share=1 + ema_detrend(0.1) | 0.178997 | 0.237288 | 0.002497 | 0.000336 | 1.791624 | 0.291748 | 0.064524 | worse |
+| F3 | Weather | 96?96 | DualStream+SMGP | decomp_alpha=0.1, share=0 + ema_detrend(0.1) | 0.168427 | 0.236641 | 0.002438 | 0.000336 | 1.791758 | 0.282522 | 0.065411 | best MSE but MAE worse |
+| F3 | Weather | 96?96 | DualStream+SMGP | decomp_alpha=0.2, share=0 + ema_detrend(0.1) | 0.169409 | 0.239377 | 0.002470 | 0.000336 | 1.791755 | 0.315909 | 0.062215 | worse |
+| F3 | Weather | 96?96 | DualStream+SMGP | decomp_alpha=0.3, share=0 + ema_detrend(0.1) | 0.170493 | 0.241196 | 0.002455 | 0.000335 | 1.791759 | 0.262365 | 0.067094 | worse |
+
+---
+
+## v3 Summary (Current)
+- Use share=1 trend head as default (stable MAE on both ETTm1 and Weather).
+- Dual-Stream best region: `decomp_alpha=0.1` (larger alpha over-emphasizes trend).
+- SMGP map choice:
+  - ETTm1: `ma_detrend(window=16)`
+  - Weather: `ema_detrend(alpha=0.1)`
+
+## Best Config (Share=1)
+- **ETTm1 (96->96)**
+  - `graph_map_norm=ma_detrend, graph_map_window=16`
+  - `decomp_mode=ema, decomp_alpha=0.1`
+  - `trend_head=linear, trend_head_share=1`
+  - `gate_mode=per_var, gate_init=-6`
+  - `graph_scale=8, adj_topk=6`
+  - Metrics: MSE 0.31757 / MAE 0.35787
+- **Weather (96->96)**
+  - `graph_map_norm=ema_detrend, graph_map_alpha=0.1`
+  - `decomp_mode=ema, decomp_alpha=0.1`
+  - `trend_head=linear, trend_head_share=1`
+  - `gate_mode=per_var, gate_init=-6`
+  - `graph_scale=8, adj_topk=6`
+  - Metrics: MSE 0.17278 / MAE 0.23015
