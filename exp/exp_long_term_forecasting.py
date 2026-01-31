@@ -54,6 +54,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             alpha_tensor = torch.sigmoid(base_alpha.detach())
         stats.update(compute_tensor_stats(gate_tensor, prefix="gate_"))
         stats.update(compute_tensor_stats(alpha_tensor, prefix="alpha_"))
+        routing_conf = getattr(model_ref, "last_routing_conf", None)
+        if routing_conf is not None:
+            stats.update(compute_tensor_stats(routing_conf, prefix="routing_conf_"))
+        routing_alpha = getattr(model_ref, "last_routing_alpha", None)
+        if routing_alpha is not None:
+            stats.update(compute_tensor_stats(routing_alpha, prefix="routing_alpha_"))
         g_scale_tensor = None
         gcn_block = getattr(model_ref, "season_gcn", None)
         if gcn_block is not None:
@@ -178,6 +184,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             model_ref = self.model.module if isinstance(self.model, nn.DataParallel) else self.model
             if hasattr(model_ref, "graph_mixer") and hasattr(model_ref.graph_mixer, "set_epoch"):
                 model_ref.graph_mixer.set_epoch(epoch + 1)
+            if hasattr(model_ref, "set_epoch"):
+                model_ref.set_epoch(epoch + 1)
             epoch_time = time.time()
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(train_loader):
                 iter_count += 1
@@ -199,10 +207,14 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                         model_ref.last_graph_adjs = None
                     if log_graph and hasattr(model_ref, "last_graph_map_mean_abs"):
                         model_ref.last_graph_map_mean_abs = None
-                    if log_graph and hasattr(model_ref, "last_graph_map_std_mean"):
-                        model_ref.last_graph_map_std_mean = None
-                    if log_graph and hasattr(model_ref, "last_decomp_energy"):
-                        model_ref.last_decomp_energy = None
+                if log_graph and hasattr(model_ref, "last_graph_map_std_mean"):
+                    model_ref.last_graph_map_std_mean = None
+                if log_graph and hasattr(model_ref, "last_decomp_energy"):
+                    model_ref.last_decomp_energy = None
+                if log_graph and hasattr(model_ref, "last_routing_conf"):
+                    model_ref.last_routing_conf = None
+                if log_graph and hasattr(model_ref, "last_routing_alpha"):
+                    model_ref.last_routing_alpha = None
 
                 # encoder - decoder
                 if self.args.use_amp:

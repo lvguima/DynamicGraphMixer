@@ -248,6 +248,20 @@ if __name__ == '__main__':
                         help='initial logit for mixing gate (sigmoid)')
     parser.add_argument('--tcn_kernel', type=int, default=3, help='kernel size for temporal TCN')
     parser.add_argument('--tcn_dilation', type=int, default=2, help='dilation base for temporal TCN')
+    parser.add_argument('--routing_mode', type=str, default='none',
+                        help='routing mode for dynamic/prior mix: none, deterministic, affine_learned')
+    parser.add_argument('--routing_conf_metric', type=str, default='overlap_topk',
+                        help='routing confidence metric: overlap_topk or l1_distance')
+    parser.add_argument('--routing_gamma', type=float, default=2.0,
+                        help='gamma for deterministic routing (alpha=(1-conf)^gamma)')
+    parser.add_argument('--routing_warmup_epochs', type=int, default=0,
+                        help='warmup epochs forcing alpha=1 when routing is enabled')
+    parser.add_argument('--routing_l1_scale', type=float, default=2.0,
+                        help='scale for l1_distance confidence (conf=1-l1/scale)')
+    parser.add_argument('--routing_w_init', type=float, default=2.0,
+                        help='affine_learned routing w init')
+    parser.add_argument('--routing_b_init', type=float, default=0.0,
+                        help='affine_learned routing b init')
     parser.add_argument('--graph_source', type=str, default='content_mean',
                         help='[Deprecated] graph_source fixed to content_mean')
     parser.add_argument('--stable_level', type=str, default='point',

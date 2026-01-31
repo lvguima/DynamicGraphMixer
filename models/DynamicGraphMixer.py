@@ -65,6 +65,11 @@ class Model(nn.Module):
         self.graph_mixer_type = str(getattr(configs, "graph_mixer_type", "baseline")).lower()
         self.gate_mode = str(getattr(configs, "gate_mode", "none")).lower()
         self.gate_init = float(getattr(configs, "gate_init", -4.0))
+        self.routing_mode = str(getattr(configs, "routing_mode", "none")).lower()
+        self.routing_conf_metric = str(getattr(configs, "routing_conf_metric", "overlap_topk")).lower()
+        self.routing_gamma = float(getattr(configs, "routing_gamma", 2.0))
+        self.routing_warmup_epochs = int(getattr(configs, "routing_warmup_epochs", 0))
+        self.routing_l1_scale = float(getattr(configs, "routing_l1_scale", 2.0))
         self.season_gcn_enable = bool(getattr(configs, "season_gcn", False))
         self.season_gcn_layers = int(getattr(configs, "season_gcn_layers", 1))
         self.season_gcn_norm = str(getattr(configs, "season_gcn_norm", "sym")).lower()
@@ -180,6 +185,24 @@ class Model(nn.Module):
         self.last_graph_map_mean_abs = None
         self.last_graph_map_std_mean = None
         self.last_decomp_energy = None
+        self.last_routing_conf = None
+        self.last_routing_alpha = None
+        self.current_epoch = 0
+
+        self.routing_w = None
+        self.routing_b = None
+        if self.routing_mode not in ("none", "deterministic", "affine_learned"):
+            raise ValueError(f"Unsupported routing_mode: {self.routing_mode}")
+        if self.routing_conf_metric not in ("overlap_topk", "l1_distance"):
+            raise ValueError(f"Unsupported routing_conf_metric: {self.routing_conf_metric}")
+        if self.routing_mode == "affine_learned":
+            w_init = float(getattr(configs, "routing_w_init", 2.0))
+            b_init = float(getattr(configs, "routing_b_init", 0.0))
+            self.routing_w = nn.Parameter(torch.tensor(w_init, dtype=torch.float))
+            self.routing_b = nn.Parameter(torch.tensor(b_init, dtype=torch.float))
+
+    def set_epoch(self, epoch: int):
+        self.current_epoch = int(epoch)
 
     def _sparsify_adj(self, adj):
         if self.adj_sparsify != "topk":
@@ -218,6 +241,37 @@ class Model(nn.Module):
             raise ValueError(f"prior graph shape mismatch: {arr.shape} vs {(self.enc_in, self.enc_in)}")
         return torch.tensor(arr, dtype=torch.float)
 
+    def _routing_confidence(self, dyn_adj, base_adj):
+        if base_adj is None:
+            return None
+        if self.routing_conf_metric == "overlap_topk":
+            k = max(1, int(self.adj_topk))
+            scores_dyn = dyn_adj.clone()
+            scores_base = base_adj.clone()
+            scores_dyn.diagonal(dim1=-2, dim2=-1).fill_(-float("inf"))
+            scores_base.diagonal(dim1=-2, dim2=-1).fill_(-float("inf"))
+            k = min(k, scores_dyn.shape[-1])
+            dyn_idx = torch.topk(scores_dyn, k, dim=-1).indices
+            base_idx = torch.topk(scores_base, k, dim=-1).indices
+            matches = dyn_idx.unsqueeze(-1) == base_idx.unsqueeze(-2)
+            overlap = matches.any(-1).float().mean(-1)
+            return overlap.mean(-1).clamp(0.0, 1.0)
+        if self.routing_conf_metric == "l1_distance":
+            l1 = torch.abs(dyn_adj - base_adj).mean(dim=(-1, -2))
+            conf = 1.0 - (l1 / max(1e-6, float(self.routing_l1_scale)))
+            return conf.clamp(0.0, 1.0)
+        raise ValueError(f"Unsupported routing_conf_metric: {self.routing_conf_metric}")
+
+    def _routing_alpha(self, conf):
+        if conf is None:
+            return None
+        if self.routing_mode == "deterministic":
+            alpha = (1.0 - conf).clamp(0.0, 1.0) ** max(1e-6, float(self.routing_gamma))
+            return alpha
+        if self.routing_mode == "affine_learned":
+            return torch.sigmoid(self.routing_w * (1.0 - conf) + self.routing_b)
+        return None
+
     def _mix_segments(self, h_time, h_graph=None):
         # h_time: [B, C, N, D], h_graph provides map features for adjacency
         if h_graph is None:
@@ -227,9 +281,9 @@ class Model(nn.Module):
 
         base_adj = None
         base_reg = None
-        alpha = None
+        base_alpha = None
         if self.graph_base_mode == "mix":
-            alpha = torch.sigmoid(self.graph_base_alpha)
+            base_alpha = torch.sigmoid(self.graph_base_alpha)
             if self.graph_base_fixed is not None:
                 base_adj_single = self.graph_base_fixed
                 base_adj = base_adj_single.unsqueeze(0).expand(bsz, -1, -1)
@@ -247,6 +301,9 @@ class Model(nn.Module):
             self.last_graph_base_adj = base_adj_single.detach().cpu()
         elif self.graph_log:
             self.last_graph_base_adj = None
+        conf_list = [] if self.graph_log else None
+        routing_alpha_list = [] if self.graph_log else None
+
         for start in range(0, num_tokens, scale):
             end = min(start + scale, num_tokens)
             h_seg = h_time[:, :, start:end, :]
@@ -257,9 +314,24 @@ class Model(nn.Module):
 
             if self.graph_mixer_type in ("baseline", "gcn_norm"):
                 z_t = h_graph_seg.mean(dim=2)
-                adj, _, _ = self.graph_learner(z_t)
+                dyn_adj, _, _ = self.graph_learner(z_t)
+                adj = dyn_adj
                 if base_adj is not None:
-                    adj = (1.0 - alpha) * adj + alpha * base_adj
+                    if self.routing_mode != "none":
+                        conf = self._routing_confidence(dyn_adj, base_adj)
+                        alpha = self._routing_alpha(conf)
+                        if self.training and self.routing_warmup_epochs > 0:
+                            if self.current_epoch <= self.routing_warmup_epochs:
+                                alpha = torch.ones_like(alpha)
+                        if alpha is not None:
+                            alpha_view = alpha.view(-1, 1, 1)
+                            adj = (1.0 - alpha_view) * dyn_adj + alpha_view * base_adj
+                            if conf_list is not None:
+                                conf_list.append(conf.detach().cpu())
+                            if routing_alpha_list is not None:
+                                routing_alpha_list.append(alpha.detach().cpu())
+                    elif base_alpha is not None:
+                        adj = (1.0 - base_alpha) * dyn_adj + base_alpha * base_adj
                 log_raw = adj
                 adj = self._sparsify_adj(adj)
                 prev_adj = adj
@@ -299,10 +371,20 @@ class Model(nn.Module):
         if log_adjs is not None:
             self.last_graph_adjs = log_adjs
             self.last_graph_raw_adjs = log_raw_adjs
+            if conf_list:
+                self.last_routing_conf = torch.stack(conf_list, dim=0).mean(dim=0)
+            else:
+                self.last_routing_conf = None
+            if routing_alpha_list:
+                self.last_routing_alpha = torch.stack(routing_alpha_list, dim=0).mean(dim=0)
+            else:
+                self.last_routing_alpha = None
         else:
             self.last_graph_adjs = None
             self.last_graph_raw_adjs = None
             self.last_graph_base_adj = None
+            self.last_routing_conf = None
+            self.last_routing_alpha = None
         return h_mix, None
 
     def _ema_decompose(self, x_enc):
