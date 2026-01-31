@@ -111,21 +111,23 @@ class Model(nn.Module):
         )
         self.graph_base_logits = None
         self.graph_base_alpha = None
-        self.graph_base_fixed = None
+        base_adj_fixed = None
         if self.graph_base_mode == "mix":
             self.graph_base_alpha = nn.Parameter(torch.tensor(-8.0, dtype=torch.float))
             if self.base_graph_type == "learned":
                 self.graph_base_logits = nn.Parameter(torch.zeros(self.enc_in, self.enc_in))
             elif self.base_graph_type == "identity":
-                base_adj = torch.eye(self.enc_in, dtype=torch.float)
-                self.register_buffer("graph_base_fixed", base_adj)
+                base_adj_fixed = torch.eye(self.enc_in, dtype=torch.float)
             elif self.base_graph_type == "prior":
-                base_adj = self._load_prior_graph(configs)
-                self.register_buffer("graph_base_fixed", base_adj)
+                base_adj_fixed = self._load_prior_graph(configs)
             else:
                 raise ValueError(f"Unsupported base_graph_type: {self.base_graph_type}")
         elif self.graph_base_mode != "none":
             raise ValueError(f"Unsupported graph_base_mode: {self.graph_base_mode}")
+        if base_adj_fixed is not None:
+            self.register_buffer("graph_base_fixed", base_adj_fixed)
+        else:
+            self.graph_base_fixed = None
         self.graph_generator = self.graph_learner
         self.graph_mixer = GraphMixerV7(
             configs=configs,
