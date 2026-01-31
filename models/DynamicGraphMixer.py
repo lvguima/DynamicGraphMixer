@@ -9,6 +9,7 @@ from modules.graph_map import GraphMapNormalizer
 from modules.graph_mixer_v7 import GraphMixerV7
 from modules.head import ForecastHead
 from modules.gcn import ResidualGCN
+from modules.graph_correction import GraphCorrectionHead
 
 
 class TrendHead(nn.Module):
@@ -76,6 +77,13 @@ class Model(nn.Module):
         self.season_gcn_g_init = float(getattr(configs, "season_gcn_g_init", 0.0))
         self.season_gcn_g_mode = str(getattr(configs, "season_gcn_g_mode", "scalar")).lower()
         self.season_gcn_adj_source = str(getattr(configs, "season_gcn_adj_source", "prior")).lower()
+        self.graph_correction_enable = bool(getattr(configs, "graph_correction", False))
+        self.graph_correction_on = str(getattr(configs, "graph_correction_on", "season")).lower()
+        self.graph_correction_beta_mode = str(getattr(configs, "graph_correction_beta_mode", "scalar")).lower()
+        self.graph_correction_beta_init = float(getattr(configs, "graph_correction_beta_init", 0.0))
+        self.graph_correction_gcn_layers = int(getattr(configs, "graph_correction_gcn_layers", 1))
+        self.graph_correction_gcn_norm = str(getattr(configs, "graph_correction_gcn_norm", "sym")).lower()
+        self.graph_correction_gcn_g_mode = str(getattr(configs, "graph_correction_gcn_g_mode", "scalar")).lower()
         # Removed features: stable_stream graph source, patch/token pooling, and graph smoothness.
         # Keep backward compatibility by validating deprecated args.
         graph_source = str(getattr(configs, "graph_source", "content_mean")).lower()
@@ -187,6 +195,9 @@ class Model(nn.Module):
         self.last_decomp_energy = None
         self.last_routing_conf = None
         self.last_routing_alpha = None
+        self.last_mix_adj = None
+        self.last_correction_beta = None
+        self.last_correction_delta_norm = None
         self.current_epoch = 0
 
         self.routing_w = None
@@ -200,6 +211,30 @@ class Model(nn.Module):
             b_init = float(getattr(configs, "routing_b_init", 0.0))
             self.routing_w = nn.Parameter(torch.tensor(w_init, dtype=torch.float))
             self.routing_b = nn.Parameter(torch.tensor(b_init, dtype=torch.float))
+
+        self.graph_correction = None
+        self.graph_correction_beta = None
+        if self.graph_correction_enable:
+            if self.graph_correction_on not in ("season", "full"):
+                raise ValueError("graph_correction_on must be 'season' or 'full'.")
+            self.graph_correction = GraphCorrectionHead(
+                d_model=configs.d_model,
+                num_vars=self.enc_in,
+                num_tokens=self.num_tokens,
+                pred_len=self.pred_len,
+                gcn_layers=self.graph_correction_gcn_layers,
+                gcn_norm=self.graph_correction_gcn_norm,
+                gcn_g_mode=self.graph_correction_gcn_g_mode,
+                dropout=configs.dropout,
+            )
+            if self.graph_correction_beta_mode == "scalar":
+                self.graph_correction_beta = nn.Parameter(torch.tensor(self.graph_correction_beta_init))
+            elif self.graph_correction_beta_mode == "per_var":
+                self.graph_correction_beta = nn.Parameter(
+                    torch.full((1, 1, self.c_out), float(self.graph_correction_beta_init))
+                )
+            else:
+                raise ValueError("graph_correction_beta_mode must be 'scalar' or 'per_var'.")
 
     def set_epoch(self, epoch: int):
         self.current_epoch = int(epoch)
@@ -297,6 +332,8 @@ class Model(nn.Module):
         prev_adj = None
         log_adjs = [] if self.graph_log else None
         log_raw_adjs = [] if self.graph_log else None
+        adj_sum = None
+        adj_count = 0
         if self.graph_log and base_adj is not None:
             self.last_graph_base_adj = base_adj_single.detach().cpu()
         elif self.graph_log:
@@ -334,6 +371,9 @@ class Model(nn.Module):
                         adj = (1.0 - base_alpha) * dyn_adj + base_alpha * base_adj
                 log_raw = adj
                 adj = self._sparsify_adj(adj)
+                if self.graph_correction_enable and adj is not None:
+                    adj_sum = adj if adj_sum is None else (adj_sum + adj)
+                    adj_count += 1
                 prev_adj = adj
                 log_adj = adj
                 h_seg, _, _ = self.graph_mixer(
@@ -368,6 +408,10 @@ class Model(nn.Module):
         if base_reg is None:
             base_reg = h_time.new_tensor(0.0)
         self.graph_base_reg_loss = base_reg
+        if self.graph_correction_enable:
+            self.last_mix_adj = adj_sum / max(1, adj_count) if adj_sum is not None else None
+        else:
+            self.last_mix_adj = None
         if log_adjs is not None:
             self.last_graph_adjs = log_adjs
             self.last_graph_raw_adjs = log_raw_adjs
@@ -403,7 +447,7 @@ class Model(nn.Module):
         season = x_enc - trend
         return trend, season
 
-    def _forecast_graph(self, x_enc, use_season_gcn=False):
+    def _forecast_graph(self, x_enc, use_season_gcn=False, return_latent=False):
         h_time = self.temporal_encoder(x_enc)
         if use_season_gcn and self.season_gcn is not None:
             if self.season_gcn_adj is None:
@@ -424,7 +468,10 @@ class Model(nn.Module):
         if self.c_out < h_mix.shape[1]:
             h_mix = h_mix[:, -self.c_out:, :, :]
 
-        return self.head(h_mix)
+        out = self.head(h_mix)
+        if return_latent:
+            return out, h_mix
+        return out
 
     def _forecast_trend(self, x_trend):
         if self.trend_head is None:
@@ -447,12 +494,37 @@ class Model(nn.Module):
                 self.last_decomp_energy = None
             if self.trend_only:
                 return self._forecast_trend(x_trend)
-            season_out = self._forecast_graph(x_season, use_season_gcn=True)
+            season_out, season_latent = self._forecast_graph(x_season, use_season_gcn=True, return_latent=True)
             trend_out = self._forecast_trend(x_trend)
-            return season_out + trend_out
+            base_out = season_out + trend_out
+            if self.graph_correction_enable and self.graph_correction is not None:
+                if self.graph_correction_on == "season":
+                    corr_input = season_latent
+                else:
+                    _, full_latent = self._forecast_graph(x_enc, use_season_gcn=False, return_latent=True)
+                    corr_input = full_latent
+                corr_adj = self.last_mix_adj
+                if corr_adj is not None:
+                    delta_y = self.graph_correction(corr_input, corr_adj)
+                    beta = self.graph_correction_beta
+                    if beta is None:
+                        beta = base_out.new_tensor(0.0)
+                    if beta.dim() == 0:
+                        beta_view = beta.view(1, 1, 1)
+                    else:
+                        beta_view = beta
+                    self.last_correction_beta = beta.detach().cpu()
+                    self.last_correction_delta_norm = delta_y.detach().abs().mean().cpu()
+                    return base_out + beta_view * delta_y
+            self.last_correction_beta = None
+            self.last_correction_delta_norm = None
+            return base_out
 
         self.last_decomp_energy = None
-        return self._forecast_graph(x_enc, use_season_gcn=False)
+        out = self._forecast_graph(x_enc, use_season_gcn=False)
+        self.last_correction_beta = None
+        self.last_correction_delta_norm = None
+        return out
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         if self.task_name in ["long_term_forecast", "short_term_forecast"]:

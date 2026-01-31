@@ -60,6 +60,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         routing_alpha = getattr(model_ref, "last_routing_alpha", None)
         if routing_alpha is not None:
             stats.update(compute_tensor_stats(routing_alpha, prefix="routing_alpha_"))
+        correction_beta = getattr(model_ref, "last_correction_beta", None)
+        if correction_beta is not None:
+            stats.update(compute_tensor_stats(correction_beta, prefix="beta_"))
+        correction_delta_norm = getattr(model_ref, "last_correction_delta_norm", None)
+        if correction_delta_norm is not None:
+            stats["delta_y_norm"] = float(correction_delta_norm)
         g_scale_tensor = None
         gcn_block = getattr(model_ref, "season_gcn", None)
         if gcn_block is not None:
@@ -215,6 +221,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     model_ref.last_routing_conf = None
                 if log_graph and hasattr(model_ref, "last_routing_alpha"):
                     model_ref.last_routing_alpha = None
+                if log_graph and hasattr(model_ref, "last_correction_beta"):
+                    model_ref.last_correction_beta = None
+                if log_graph and hasattr(model_ref, "last_correction_delta_norm"):
+                    model_ref.last_correction_delta_norm = None
 
                 # encoder - decoder
                 if self.args.use_amp:

@@ -26,3 +26,12 @@
 | weather | v8_step2_season_gcn_weather_mi_k6_L2 | 2 | 0.172441 | 0.230802 | 0.861675 | 0.382304 | 0.692676 | 1.791759 | 0.833453 | 0.866756 | 0.008170 | 0.002463 | 0.000362 | -0.056579 | 0.053564 | 0.285714 | 0.961905 | 0.029904 | 6 | 21 |
 | flotation | v8_step2_season_gcn_flotation_mi_k6_L2 | 2 | 0.776968 | 0.622577 | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA |
 | grinding | v8_step2_season_gcn_grinding_mi_k6_L1 | 1 | 4.300831 | 0.730693 | 0.794432 | 0.038293 | 0.954014 | 1.791756 | 0.833399 | 0.815990 | 0.018412 | 0.002478 | 0.000334 | -0.018950 | 0.043294 | 0.500000 | 0.950000 | 0.024189 | 6 | 12 |
+
+## Step3 Routing (prior=mi, topk=6, best per dataset)
+
+| Dataset | Best exp_id | routing | mse | mae | E_trend | E_season | E_ratio | entropy_mean | topk_mass | topk_overlap | l1_adj_diff | gate_mean | alpha_mean | routing_conf_mean | routing_alpha_mean | map_mean_abs | prior_sparsity | dyn_vs_prior_overlap | dyn_vs_prior_l1 | segments | num_vars |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ETTm1 | v8_step3_routing_ETTm1_mi_k6_affine | affine | 0.316557 | 0.357036 | 0.916860 | 0.126411 | 0.878832 | 1.752280 | 0.869836 | 1.000000 | 0.000013 | 0.002488 | 0.000335 | 1.000000 | 0.512030 | 0.082834 | 0.857143 | 1.000000 | 0.025657 | 6 | 7 |
+| weather | v8_step3_routing_weather_mi_k6_det_g2 | det_g2 | 0.173101 | 0.231315 | 0.754258 | 0.106719 | 0.876049 | 1.645262 | 0.907315 | 0.999970 | 0.001505 | 0.002429 | 0.000335 | 0.291791 | 0.503885 | 0.050937 | 0.285714 | 1.000000 | 0.012468 | 6 | 21 |
+| flotation | v8_step3_routing_flotation_mi_k6_affine | affine | 0.785597 | 0.622523 | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA | NA |
+| grinding | v8_step3_routing_grinding_mi_k6_det_g2 | det_g2 | 4.243982 | 0.698492 | 1.099435 | 0.074838 | 0.936269 | 1.789339 | 0.845232 | 0.998646 | 0.000927 | 0.002478 | 0.000335 | 0.558594 | 0.197115 | 0.046233 | 0.500000 | 0.983333 | 0.018059 | 6 | 12 |

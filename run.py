@@ -262,6 +262,20 @@ if __name__ == '__main__':
                         help='affine_learned routing w init')
     parser.add_argument('--routing_b_init', type=float, default=0.0,
                         help='affine_learned routing b init')
+    parser.add_argument('--graph_correction', action='store_true', default=False,
+                        help='enable graph residual correction head')
+    parser.add_argument('--graph_correction_on', type=str, default='season',
+                        help='correction input: season or full')
+    parser.add_argument('--graph_correction_beta_init', type=float, default=0.0,
+                        help='initial beta for correction head')
+    parser.add_argument('--graph_correction_beta_mode', type=str, default='scalar',
+                        help='beta mode: scalar or per_var')
+    parser.add_argument('--graph_correction_gcn_layers', type=int, default=1,
+                        help='correction GCN layers (default 1)')
+    parser.add_argument('--graph_correction_gcn_norm', type=str, default='sym',
+                        help='correction GCN norm: sym or row')
+    parser.add_argument('--graph_correction_gcn_g_mode', type=str, default='scalar',
+                        help='correction GCN residual scale mode: scalar or per_var')
     parser.add_argument('--graph_source', type=str, default='content_mean',
                         help='[Deprecated] graph_source fixed to content_mean')
     parser.add_argument('--stable_level', type=str, default='point',
