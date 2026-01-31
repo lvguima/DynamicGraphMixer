@@ -53,10 +53,11 @@
 - `configs/*.yaml`
   - 新增 v7 参数段：
     - `graph_mixer_type`
-    - `gat_heads, gat_topk, gat_bias_base`
-    - `attn_heads, attn_topk(optional)`
-    - `gcn_layers, gcn_norm`
+    - `gat_heads, gat_topk, gat_bias_base, gat_layers (default=1)`
+    - `attn_heads, attn_topk(optional), attn_layers (default=1)`
+    - `gcn_layers (default=1), gcn_norm`
     - `residual_scale_init, warmup_epochs`
+    - NOTE: start with 1 layer; only test 2-layer as a small sweep, keep residual + warmup to mitigate over-smoothing.
 
 ### 1.3 快速单元验证（必须做）
 - forward shape：输入 `[B,L,C]` 输出 `[B,pred_len,C]`
@@ -99,6 +100,7 @@
   - `gat_heads`: 4 vs 8
   - `gat_topk`: 6 vs 12
   - 固定 `graph_scale=16`, `warmup=1`, `residual_scale_init=0.0`
+  - `gat_layers`: default=1; optional follow-up 2-layer on best head/topk combo
 
 总共 2×2=4 组（每个数据集 4 次）。
 
@@ -131,6 +133,7 @@
 - Sweep-1：
   - `attn_heads`: 4 vs 8
   - `warmup_epochs`: 0 vs 1
+  - `attn_layers`: default=1; optional follow-up 2-layer if stable
 
 如果 C 很小（ETTm1）8 heads 可能不必要，但我们允许它作为对照。
 
@@ -228,6 +231,10 @@ GCN 层：
 - 如果显存超：
   1) token-wise attention 改为 segment-level（只作为临时 sanity）
   2) 开启 topk attention
+
+- If over-smoothing is suspected (2-layer worse):
+  1) fall back to 1-layer
+  2) reduce residual_scale_init or increase sparsity
 
 - 如果所有方案都无提升：
   - 结论应当是：当前数据集/设定下，跨变量交互收益不足，主性能来自 temporal encoder + dual-stream；后续应把精力投入到更强的时间建模或更好的非平稳归一化（而不是继续折腾图）。

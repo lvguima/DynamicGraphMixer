@@ -169,6 +169,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             train_loss = []
 
             self.model.train()
+            model_ref = self.model.module if isinstance(self.model, nn.DataParallel) else self.model
+            if hasattr(model_ref, "graph_mixer") and hasattr(model_ref.graph_mixer, "set_epoch"):
+                model_ref.graph_mixer.set_epoch(epoch + 1)
             epoch_time = time.time()
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(train_loader):
                 iter_count += 1
@@ -183,7 +186,6 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
 
                 step = i + 1
-                model_ref = self.model.module if isinstance(self.model, nn.DataParallel) else self.model
                 log_graph = self._should_log_graph(step)
                 if hasattr(model_ref, "graph_log"):
                     model_ref.graph_log = log_graph

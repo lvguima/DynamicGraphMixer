@@ -176,6 +176,20 @@ if __name__ == '__main__':
                         help='temporal encoder for DynamicGraphMixer: tcn or linear')
     parser.add_argument('--graph_scale', type=int, default=1, help='coarse segment length for dynamic graph')
     parser.add_argument('--graph_rank', type=int, default=8, help='low-rank size for dynamic graph')
+    parser.add_argument('--graph_mixer_type', type=str, default='baseline',
+                        help='graph mixer type: baseline, gat_seg, attn_token, gcn_norm')
+    parser.add_argument('--gat_heads', type=int, default=4, help='heads for segment-level GAT')
+    parser.add_argument('--gat_topk', type=int, default=6, help='top-k sparsify for GAT attention')
+    parser.add_argument('--gat_bias_base', type=float, default=0.0, help='base graph bias scale for GAT')
+    parser.add_argument('--gat_layers', type=int, default=1, help='number of GAT layers (default 1)')
+    parser.add_argument('--attn_heads', type=int, default=4, help='heads for token-wise cross-variable attention')
+    parser.add_argument('--attn_topk', type=int, default=0, help='top-k sparsify for token attention (0 disables)')
+    parser.add_argument('--attn_layers', type=int, default=1, help='number of attention layers (default 1)')
+    parser.add_argument('--gcn_layers', type=int, default=1, help='number of GCN layers (default 1)')
+    parser.add_argument('--gcn_norm', type=str, default='row', help='GCN normalization: row or sym')
+    parser.add_argument('--residual_scale_init', type=float, default=0.0,
+                        help='initial residual scale (clamped to [0, 1])')
+    parser.add_argument('--warmup_epochs', type=int, default=0, help='warmup epochs with residual scale forced to 0')
     parser.add_argument('--graph_smooth_lambda', type=float, default=0.0,
                         help='[Deprecated] graph smoothness removed (must be 0)')
     parser.add_argument('--graph_map_norm', type=str, default='none',

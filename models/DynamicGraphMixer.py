@@ -4,7 +4,7 @@ import torch.nn as nn
 from modules.temporal import TemporalEncoderWrapper
 from modules.graph_learner import LowRankGraphLearner
 from modules.graph_map import GraphMapNormalizer
-from modules.mixer import GraphMixer
+from modules.graph_mixer_v7 import GraphMixerV7
 from modules.head import ForecastHead
 
 
@@ -58,6 +58,7 @@ class Model(nn.Module):
         self.graph_base_mode = str(getattr(configs, "graph_base_mode", "none")).lower()
         self.graph_base_l1 = float(getattr(configs, "graph_base_l1", 0.0))
         self.adj_sparsify = str(getattr(configs, "adj_sparsify", "none")).lower()
+        self.graph_mixer_type = str(getattr(configs, "graph_mixer_type", "baseline")).lower()
         self.gate_mode = str(getattr(configs, "gate_mode", "none")).lower()
         self.gate_init = float(getattr(configs, "gate_init", -4.0))
         # Removed features: stable_stream graph source, patch/token pooling, and graph smoothness.
@@ -115,12 +116,10 @@ class Model(nn.Module):
         elif self.graph_base_mode != "none":
             raise ValueError(f"Unsupported graph_base_mode: {self.graph_base_mode}")
         self.graph_generator = self.graph_learner
-        self.graph_mixer = GraphMixer(
-            dropout=configs.dropout,
-            gate_mode=self.gate_mode,
+        self.graph_mixer = GraphMixerV7(
+            configs=configs,
             num_vars=self.enc_in,
             num_tokens=self.num_tokens,
-            gate_init=self.gate_init,
         )
         self.head = ForecastHead(
             d_model=configs.d_model,
@@ -181,17 +180,46 @@ class Model(nn.Module):
             end = min(start + scale, num_tokens)
             h_seg = h_time[:, :, start:end, :]
             h_graph_seg = h_graph[:, :, start:end, :]
-            z_t = h_graph_seg.mean(dim=2)
-            adj, _, _ = self.graph_learner(z_t)
-            if base_adj is not None:
-                adj = (1.0 - alpha) * adj + alpha * base_adj
-            if log_raw_adjs is not None:
-                log_raw_adjs.append(adj.detach().cpu())
-            adj = self._sparsify_adj(adj)
-            prev_adj = adj
-            if log_adjs is not None:
-                log_adjs.append(adj.detach().cpu())
-            h_seg = self.graph_mixer(adj, h_seg, token_offset=start)
+
+            log_adj = None
+            log_raw = None
+
+            if self.graph_mixer_type in ("baseline", "gcn_norm"):
+                z_t = h_graph_seg.mean(dim=2)
+                adj, _, _ = self.graph_learner(z_t)
+                if base_adj is not None:
+                    adj = (1.0 - alpha) * adj + alpha * base_adj
+                log_raw = adj
+                adj = self._sparsify_adj(adj)
+                prev_adj = adj
+                log_adj = adj
+                h_seg, _, _ = self.graph_mixer(
+                    h_seg,
+                    h_graph_seg,
+                    adj=adj,
+                    base_adj=base_adj,
+                    token_offset=start,
+                )
+            elif self.graph_mixer_type == "gat_seg":
+                h_seg, log_adj, log_raw = self.graph_mixer(
+                    h_seg,
+                    h_graph_seg,
+                    base_adj=base_adj,
+                    token_offset=start,
+                )
+            elif self.graph_mixer_type == "attn_token":
+                h_seg, _, _ = self.graph_mixer(
+                    h_seg,
+                    h_graph_seg,
+                    token_offset=start,
+                )
+            else:
+                raise ValueError(f"Unsupported graph_mixer_type: {self.graph_mixer_type}")
+
+            if log_raw_adjs is not None and log_raw is not None:
+                log_raw_adjs.append(log_raw.detach().cpu())
+            if log_adjs is not None and log_adj is not None:
+                log_adjs.append(log_adj.detach().cpu())
             segments.append(h_seg)
         h_mix = torch.cat(segments, dim=2)
         if base_reg is None:
