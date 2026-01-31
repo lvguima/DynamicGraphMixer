@@ -72,8 +72,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         }
         append_graph_stats(os.path.join(log_dir, "stats.csv"), stats)
 
-        vis_dir = os.path.join(log_dir, f"epoch{epoch:03d}_step{step:05d}")
-        save_graph_visuals(adjs, vis_dir, topk=topk, num_segments=num_segments)
+        # NOTE: visuals/topk artifacts disabled; keep only stats.csv.
+        # vis_dir = os.path.join(log_dir, f"epoch{epoch:03d}_step{step:05d}")
+        # save_graph_visuals(adjs, vis_dir, topk=topk, num_segments=num_segments)
 
     def _graph_log_dir(self, setting):
         log_root = getattr(self.args, "graph_log_dir", "./graph_logs")
