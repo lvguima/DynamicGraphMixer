@@ -34,6 +34,8 @@ class ResidualGCN(nn.Module):
 
     def forward(self, x, adj):
         # x: [B, C, T, D]
+        if adj.device != x.device or adj.dtype != x.dtype:
+            adj = adj.to(device=x.device, dtype=x.dtype)
         if adj.dim() == 2:
             adj = adj.unsqueeze(0).expand(x.shape[0], -1, -1)
         adj_norm = self._normalize_adj(adj)
