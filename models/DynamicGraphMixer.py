@@ -1,3 +1,5 @@
+import os
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -56,6 +58,7 @@ class Model(nn.Module):
         self.trend_head_share = bool(int(getattr(configs, "trend_head_share", 1)))
         self.trend_only = bool(getattr(configs, "trend_only", False))
         self.graph_base_mode = str(getattr(configs, "graph_base_mode", "none")).lower()
+        self.base_graph_type = str(getattr(configs, "base_graph_type", "learned")).lower()
         self.graph_base_l1 = float(getattr(configs, "graph_base_l1", 0.0))
         self.adj_sparsify = str(getattr(configs, "adj_sparsify", "none")).lower()
         self.graph_mixer_type = str(getattr(configs, "graph_mixer_type", "baseline")).lower()
@@ -108,11 +111,19 @@ class Model(nn.Module):
         )
         self.graph_base_logits = None
         self.graph_base_alpha = None
+        self.graph_base_fixed = None
         if self.graph_base_mode == "mix":
-            self.graph_base_logits = nn.Parameter(torch.zeros(self.enc_in, self.enc_in))
-            self.graph_base_alpha = nn.Parameter(
-                torch.tensor(-8.0, dtype=torch.float)
-            )
+            self.graph_base_alpha = nn.Parameter(torch.tensor(-8.0, dtype=torch.float))
+            if self.base_graph_type == "learned":
+                self.graph_base_logits = nn.Parameter(torch.zeros(self.enc_in, self.enc_in))
+            elif self.base_graph_type == "identity":
+                base_adj = torch.eye(self.enc_in, dtype=torch.float)
+                self.register_buffer("graph_base_fixed", base_adj)
+            elif self.base_graph_type == "prior":
+                base_adj = self._load_prior_graph(configs)
+                self.register_buffer("graph_base_fixed", base_adj)
+            else:
+                raise ValueError(f"Unsupported base_graph_type: {self.base_graph_type}")
         elif self.graph_base_mode != "none":
             raise ValueError(f"Unsupported graph_base_mode: {self.graph_base_mode}")
         self.graph_generator = self.graph_learner
@@ -151,6 +162,28 @@ class Model(nn.Module):
         denom = masked.sum(dim=-1, keepdim=True).clamp_min(1e-12)
         return masked / denom
 
+    def _resolve_prior_path(self, configs):
+        path = str(getattr(configs, "prior_graph_path", "")).strip()
+        if path:
+            return path
+        root = str(getattr(configs, "prior_graph_dir", "./prior_graphs")).strip()
+        method = str(getattr(configs, "prior_graph_method", "pearson_abs")).strip()
+        topk = int(getattr(configs, "prior_graph_topk", 8))
+        data_path = str(getattr(configs, "data_path", "")).strip()
+        stem = os.path.splitext(os.path.basename(data_path))[0] or str(getattr(configs, "data", "dataset"))
+        topk = max(0, min(topk, self.enc_in - 1))
+        name = f"{stem}_{method}_topk{topk}.npy"
+        return os.path.join(root, name)
+
+    def _load_prior_graph(self, configs):
+        path = self._resolve_prior_path(configs)
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"prior graph not found: {path}")
+        arr = np.load(path)
+        if arr.shape != (self.enc_in, self.enc_in):
+            raise ValueError(f"prior graph shape mismatch: {arr.shape} vs {(self.enc_in, self.enc_in)}")
+        return torch.tensor(arr, dtype=torch.float)
+
     def _mix_segments(self, h_time, h_graph=None):
         # h_time: [B, C, N, D], h_graph provides map features for adjacency
         if h_graph is None:
@@ -162,11 +195,15 @@ class Model(nn.Module):
         base_reg = None
         alpha = None
         if self.graph_base_mode == "mix":
-            base_adj_single = torch.softmax(self.graph_base_logits, dim=-1)
-            base_adj = base_adj_single.unsqueeze(0).expand(bsz, -1, -1)
             alpha = torch.sigmoid(self.graph_base_alpha)
-            if self.graph_base_l1 > 0:
-                base_reg = base_adj_single.abs().mean()
+            if self.graph_base_fixed is not None:
+                base_adj_single = self.graph_base_fixed
+                base_adj = base_adj_single.unsqueeze(0).expand(bsz, -1, -1)
+            else:
+                base_adj_single = torch.softmax(self.graph_base_logits, dim=-1)
+                base_adj = base_adj_single.unsqueeze(0).expand(bsz, -1, -1)
+                if self.graph_base_l1 > 0:
+                    base_reg = base_adj_single.abs().mean()
 
         segments = []
         prev_adj = None

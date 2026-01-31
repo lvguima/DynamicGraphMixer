@@ -212,6 +212,16 @@ if __name__ == '__main__':
                         help='use only trend branch for prediction (requires decomp_mode=ema and trend_head=linear)')
     parser.add_argument('--graph_base_mode', type=str, default='none',
                         help='base graph mode: none or mix')
+    parser.add_argument('--base_graph_type', type=str, default='learned',
+                        help='base graph source when graph_base_mode=mix: learned, identity, prior')
+    parser.add_argument('--prior_graph_path', type=str, default='',
+                        help='path to prior graph .npy (used when base_graph_type=prior)')
+    parser.add_argument('--prior_graph_dir', type=str, default='./prior_graphs',
+                        help='default directory for prior graphs')
+    parser.add_argument('--prior_graph_method', type=str, default='pearson_abs',
+                        help='prior graph method for default path resolution')
+    parser.add_argument('--prior_graph_topk', type=int, default=8,
+                        help='prior graph topk for default path resolution')
     parser.add_argument('--graph_base_alpha_init', type=float, default=-8.0,
                         help='[Deprecated] base alpha init fixed to -8')
     parser.add_argument('--graph_base_l1', type=float, default=0.0,

@@ -152,6 +152,46 @@ def _adj_stats(stacked, topk, prefix):
     return stats
 
 
+def _sparsity_from_adj(stacked):
+    if stacked is None:
+        return float("nan")
+    vals = stacked.reshape(-1)
+    if vals.numel() == 0:
+        return float("nan")
+    return (vals > 0).float().mean().item()
+
+
+def _dyn_prior_overlap(stacked, base_adj, k):
+    if stacked is None or base_adj is None:
+        return float("nan")
+    if k <= 0:
+        return float("nan")
+    mean_adj = stacked.mean(dim=(0, 1))
+    base = _stack_single_adj(base_adj)
+    if base is None:
+        return float("nan")
+    base_mean = base.mean(dim=(0, 1))
+    k = min(int(k), mean_adj.shape[-1])
+    if k <= 0:
+        return float("nan")
+    dyn_idx = torch.topk(mean_adj, k, dim=-1).indices
+    base_idx = torch.topk(base_mean, k, dim=-1).indices
+    matches = dyn_idx.unsqueeze(-1) == base_idx.unsqueeze(-2)
+    overlap = matches.any(-1).float().mean(-1)
+    return overlap.mean().item()
+
+
+def _dyn_prior_l1(stacked, base_adj):
+    if stacked is None or base_adj is None:
+        return float("nan")
+    mean_adj = stacked.mean(dim=(0, 1))
+    base = _stack_single_adj(base_adj)
+    if base is None:
+        return float("nan")
+    base_mean = base.mean(dim=(0, 1))
+    return torch.abs(mean_adj - base_mean).mean().item()
+
+
 def _conf_stats_from_entropy(entropy, num_vars):
     stats = {key: float("nan") for key in _CONF_STATS_KEYS}
     if entropy is None:
@@ -222,6 +262,10 @@ def compute_graph_stats(adjs, topk=5, raw_adjs=None, base_adj=None):
 
     base_stacked = _stack_single_adj(base_adj)
     stats.update(_adj_stats(base_stacked, topk, prefix="base_"))
+    stats["prior_entropy_mean"] = stats.get("base_entropy_mean", float("nan"))
+    stats["prior_sparsity"] = _sparsity_from_adj(base_stacked)
+    stats["dyn_vs_prior_overlap"] = _dyn_prior_overlap(stacked, base_adj, topk)
+    stats["dyn_vs_prior_l1"] = _dyn_prior_l1(stacked, base_adj)
 
     stats["segments"] = int(stacked.shape[0])
     stats["num_vars"] = int(stacked.shape[-1])
