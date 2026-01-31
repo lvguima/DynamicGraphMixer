@@ -35,3 +35,12 @@
 | weather | v7_step3_attn_weather_H8_W0_L1 | 0.172186 | 0.230027 |
 | flotation | v7_step3_attn_flotation_H8_W1_L1 | 0.787332 | 0.624011 |
 | grinding | v7_step3_attn_grinding_H8_W1_L1 | 4.266300 | 0.704834 |
+
+## Step4 GCN Sweep (best per dataset)
+
+| Dataset | Best exp_id | mse | mae | entropy_mean | topk_mass | topk_overlap | l1_adj_diff | alpha_mean | map_mean_abs | E_trend | E_season | E_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ETTm1 | v7_step4_gcn_ETTm1_L1_Nrow | 0.319897 | 0.356824 | 1.791759 | 0.833390 | 0.863929 | 0.033097 | 0.000335 | 0.081429 | 0.919558 | 0.135729 | 0.871382 |
+| weather | v7_step4_gcn_weather_L2_Nsym | 0.171304 | 0.227934 | 1.788497 | 0.835252 | 0.387054 | 0.054985 | 0.000334 | 0.049353 | 0.779450 | 0.128585 | 0.858392 |
+| flotation | v7_step4_gcn_flotation_L2_Nsym | 0.777328 | 0.622753 | NA | NA | NA | NA | NA | NA | NA | NA | NA |
+| grinding | v7_step4_gcn_grinding_L1_Nsym | 4.298116 | 0.729698 | 1.791759 | 0.833340 | 0.514583 | 0.074394 | 0.000335 | 0.042733 | 0.794432 | 0.038293 | 0.954014 |
