@@ -1,9 +1,14 @@
 import argparse
 import json
 import os
+import sys
 from types import SimpleNamespace
 
 import numpy as np
+
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 from data_provider.data_loader import Dataset_ETT_minute, Dataset_Custom
 
