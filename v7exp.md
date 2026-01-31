@@ -26,3 +26,12 @@
 | weather | v7_step2_gat_weather_H4_K12_L1 | 0.172366 | 0.230349 | 2.652599 | 0.408391 | 0.380298 | 0.031578 | 0.000335 | 0.055124 | 0.942074 | 0.396860 | 0.703600 |
 | flotation | v7_step2_gat_flotation_H4_K6_L2 | 0.782341 | 0.624838 | NA | NA | NA | NA | NA | NA | NA | NA | NA |
 | grinding | v7_step2_gat_grinding_H4_K12_L1 | 4.265688 | 0.704722 | 2.484906 | 0.416703 | 0.529271 | 0.000009 | 0.000335 | 0.040003 | 0.884143 | 0.029665 | 0.967537 |
+
+## Step3 Token-Attn Sweep (best per dataset)
+
+| Dataset | Best exp_id | mse | mae |
+| --- | --- | --- | --- |
+| ETTm1 | v7_step3_attn_ETTm1_H8_W0_L1 | 0.318460 | 0.357827 |
+| weather | v7_step3_attn_weather_H8_W0_L1 | 0.172186 | 0.230027 |
+| flotation | v7_step3_attn_flotation_H8_W1_L1 | 0.787332 | 0.624011 |
+| grinding | v7_step3_attn_grinding_H8_W1_L1 | 4.266300 | 0.704834 |
