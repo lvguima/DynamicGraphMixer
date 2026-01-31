@@ -54,6 +54,11 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             alpha_tensor = torch.sigmoid(base_alpha.detach())
         stats.update(compute_tensor_stats(gate_tensor, prefix="gate_"))
         stats.update(compute_tensor_stats(alpha_tensor, prefix="alpha_"))
+        g_scale_tensor = None
+        gcn_block = getattr(model_ref, "season_gcn", None)
+        if gcn_block is not None:
+            g_scale_tensor = getattr(gcn_block, "g_scale", None)
+        stats.update(compute_tensor_stats(g_scale_tensor, prefix="g_scale_"))
         map_mean_abs = getattr(model_ref, "last_graph_map_mean_abs", None)
         if map_mean_abs is not None:
             stats["map_mean_abs"] = float(map_mean_abs)

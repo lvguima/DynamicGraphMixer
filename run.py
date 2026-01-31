@@ -187,6 +187,18 @@ if __name__ == '__main__':
     parser.add_argument('--attn_layers', type=int, default=1, help='number of attention layers (default 1)')
     parser.add_argument('--gcn_layers', type=int, default=1, help='number of GCN layers (default 1)')
     parser.add_argument('--gcn_norm', type=str, default='row', help='GCN normalization: row or sym')
+    parser.add_argument('--season_gcn', action='store_true', default=False,
+                        help='enable seasonal residual GCN with prior adjacency')
+    parser.add_argument('--season_gcn_layers', type=int, default=1,
+                        help='number of seasonal GCN layers (default 1)')
+    parser.add_argument('--season_gcn_norm', type=str, default='sym',
+                        help='seasonal GCN normalization: sym or row')
+    parser.add_argument('--season_gcn_g_init', type=float, default=0.0,
+                        help='initial residual scale for seasonal GCN')
+    parser.add_argument('--season_gcn_g_mode', type=str, default='scalar',
+                        help='seasonal GCN residual scale mode: scalar or per_var')
+    parser.add_argument('--season_gcn_adj_source', type=str, default='prior',
+                        help='seasonal GCN adjacency source: prior or identity')
     parser.add_argument('--residual_scale_init', type=float, default=0.0,
                         help='initial residual scale (clamped to [0, 1])')
     parser.add_argument('--warmup_epochs', type=int, default=0, help='warmup epochs with residual scale forced to 0')

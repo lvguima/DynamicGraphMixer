@@ -8,6 +8,7 @@ from modules.graph_learner import LowRankGraphLearner
 from modules.graph_map import GraphMapNormalizer
 from modules.graph_mixer_v7 import GraphMixerV7
 from modules.head import ForecastHead
+from modules.gcn import ResidualGCN
 
 
 class TrendHead(nn.Module):
@@ -64,6 +65,12 @@ class Model(nn.Module):
         self.graph_mixer_type = str(getattr(configs, "graph_mixer_type", "baseline")).lower()
         self.gate_mode = str(getattr(configs, "gate_mode", "none")).lower()
         self.gate_init = float(getattr(configs, "gate_init", -4.0))
+        self.season_gcn_enable = bool(getattr(configs, "season_gcn", False))
+        self.season_gcn_layers = int(getattr(configs, "season_gcn_layers", 1))
+        self.season_gcn_norm = str(getattr(configs, "season_gcn_norm", "sym")).lower()
+        self.season_gcn_g_init = float(getattr(configs, "season_gcn_g_init", 0.0))
+        self.season_gcn_g_mode = str(getattr(configs, "season_gcn_g_mode", "scalar")).lower()
+        self.season_gcn_adj_source = str(getattr(configs, "season_gcn_adj_source", "prior")).lower()
         # Removed features: stable_stream graph source, patch/token pooling, and graph smoothness.
         # Keep backward compatibility by validating deprecated args.
         graph_source = str(getattr(configs, "graph_source", "content_mean")).lower()
@@ -134,6 +141,31 @@ class Model(nn.Module):
             num_vars=self.enc_in,
             num_tokens=self.num_tokens,
         )
+        self.season_gcn = None
+        self.season_gcn_adj = None
+        if self.season_gcn_enable:
+            self.season_gcn = ResidualGCN(
+                d_model=configs.d_model,
+                num_vars=self.enc_in,
+                layers=self.season_gcn_layers,
+                norm=self.season_gcn_norm,
+                dropout=configs.dropout,
+                g_init=self.season_gcn_g_init,
+                g_mode=self.season_gcn_g_mode,
+            )
+            if self.season_gcn_adj_source == "prior":
+                if self.graph_base_fixed is not None:
+                    self.season_gcn_adj = self.graph_base_fixed
+                else:
+                    prior_adj = self._load_prior_graph(configs)
+                    self.register_buffer("season_gcn_adj", prior_adj)
+                    self.season_gcn_adj = self.season_gcn_adj
+            elif self.season_gcn_adj_source == "identity":
+                eye = torch.eye(self.enc_in, dtype=torch.float)
+                self.register_buffer("season_gcn_adj", eye)
+                self.season_gcn_adj = self.season_gcn_adj
+            else:
+                raise ValueError(f"Unsupported season_gcn_adj_source: {self.season_gcn_adj_source}")
         self.head = ForecastHead(
             d_model=configs.d_model,
             num_tokens=self.num_tokens,
@@ -289,8 +321,12 @@ class Model(nn.Module):
         season = x_enc - trend
         return trend, season
 
-    def _forecast_graph(self, x_enc):
+    def _forecast_graph(self, x_enc, use_season_gcn=False):
         h_time = self.temporal_encoder(x_enc)
+        if use_season_gcn and self.season_gcn is not None:
+            if self.season_gcn_adj is None:
+                raise ValueError("season_gcn is enabled but season_gcn_adj is not set.")
+            h_time = self.season_gcn(h_time, self.season_gcn_adj)
         h_graph = h_time
         h_map = self.graph_map(h_graph)
         if self.graph_map_detach and h_map is not None:
@@ -329,12 +365,12 @@ class Model(nn.Module):
                 self.last_decomp_energy = None
             if self.trend_only:
                 return self._forecast_trend(x_trend)
-            season_out = self._forecast_graph(x_season)
+            season_out = self._forecast_graph(x_season, use_season_gcn=True)
             trend_out = self._forecast_trend(x_trend)
             return season_out + trend_out
 
         self.last_decomp_energy = None
-        return self._forecast_graph(x_enc)
+        return self._forecast_graph(x_enc, use_season_gcn=False)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         if self.task_name in ["long_term_forecast", "short_term_forecast"]:
