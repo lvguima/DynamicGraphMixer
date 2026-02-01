@@ -344,25 +344,82 @@ def _topk_neighbors(adj, topk):
     return result
 
 
-def save_graph_visuals(adjs, out_dir, topk=5, num_segments=1):
+def save_graph_visuals(
+    adjs,
+    out_dir,
+    topk=5,
+    num_segments=1,
+    base_adj=None,
+    raw_adjs=None,
+    save_png=True,
+):
     stacked = _stack_adjs(adjs)
     if stacked is None:
         return
     os.makedirs(out_dir, exist_ok=True)
-    mean_adjs = stacked.mean(dim=1).cpu().numpy()
-    np.save(os.path.join(out_dir, "adj_segments_mean.npy"), mean_adjs)
+    mean_adjs = stacked.mean(dim=1)
+    np.save(os.path.join(out_dir, "adj_segments_mean.npy"), mean_adjs.cpu().numpy())
+    mean_adj = mean_adjs.mean(dim=0)
+    np.save(os.path.join(out_dir, "adj_mean.npy"), mean_adj.cpu().numpy())
+
+    raw_mean = None
+    if raw_adjs is not None:
+        raw_stacked = _stack_adjs(raw_adjs)
+        if raw_stacked is not None:
+            raw_mean_adjs = raw_stacked.mean(dim=1)
+            np.save(os.path.join(out_dir, "raw_adj_segments_mean.npy"), raw_mean_adjs.cpu().numpy())
+            raw_mean = raw_mean_adjs.mean(dim=0)
+            np.save(os.path.join(out_dir, "raw_adj_mean.npy"), raw_mean.cpu().numpy())
+
+    base_mean = None
+    if base_adj is not None:
+        base = _stack_single_adj(base_adj)
+        if base is not None:
+            base_mean = base.mean(dim=(0, 1))
+            np.save(os.path.join(out_dir, "base_adj.npy"), base_mean.cpu().numpy())
+
+    # per-variable entropy/confidence for dynamic (and raw) adjacency
+    eps = 1e-12
+    dyn_entropy = -(mean_adj * (mean_adj + eps).log()).sum(-1)
+    np.save(os.path.join(out_dir, "per_var_entropy.npy"), dyn_entropy.cpu().numpy())
+    denom = max(1e-6, float(np.log(mean_adj.shape[-1])))
+    dyn_conf = (1.0 - (dyn_entropy / denom)).clamp(min=0.0, max=1.0)
+    np.save(os.path.join(out_dir, "per_var_conf.npy"), dyn_conf.cpu().numpy())
+
+    if raw_mean is not None:
+        raw_entropy = -(raw_mean * (raw_mean + eps).log()).sum(-1)
+        np.save(os.path.join(out_dir, "per_var_raw_entropy.npy"), raw_entropy.cpu().numpy())
+        raw_conf = (1.0 - (raw_entropy / denom)).clamp(min=0.0, max=1.0)
+        np.save(os.path.join(out_dir, "per_var_raw_conf.npy"), raw_conf.cpu().numpy())
+
+    # per-variable overlap/l1 against base
+    if base_mean is not None:
+        k = max(1, int(topk))
+        k = min(k, mean_adj.shape[-1])
+        dyn_scores = mean_adj.clone()
+        base_scores = base_mean.clone()
+        dyn_scores.diagonal(dim1=-2, dim2=-1).fill_(-float("inf"))
+        base_scores.diagonal(dim1=-2, dim2=-1).fill_(-float("inf"))
+        dyn_idx = torch.topk(dyn_scores, k, dim=-1).indices
+        base_idx = torch.topk(base_scores, k, dim=-1).indices
+        matches = dyn_idx.unsqueeze(-1) == base_idx.unsqueeze(-2)
+        overlap = matches.any(-1).float().mean(-1)
+        np.save(os.path.join(out_dir, "per_var_overlap.npy"), overlap.cpu().numpy())
+        per_var_l1 = torch.abs(mean_adj - base_mean).mean(dim=-1)
+        np.save(os.path.join(out_dir, "per_var_l1.npy"), per_var_l1.cpu().numpy())
 
     seg_count = mean_adjs.shape[0]
     num_segments = max(1, min(int(num_segments), seg_count))
     for seg_idx in range(num_segments):
-        adj = mean_adjs[seg_idx]
-        plt.figure(figsize=(4, 3))
-        plt.imshow(adj, cmap="viridis")
-        plt.colorbar()
-        plt.title(f"Adjacency mean seg {seg_idx}")
-        plt.tight_layout()
-        plt.savefig(os.path.join(out_dir, f"adj_heatmap_seg{seg_idx}.png"))
-        plt.close()
+        adj = mean_adjs[seg_idx].cpu().numpy()
+        if save_png:
+            plt.figure(figsize=(4, 3))
+            plt.imshow(adj, cmap="viridis")
+            plt.colorbar()
+            plt.title(f"Adjacency mean seg {seg_idx}")
+            plt.tight_layout()
+            plt.savefig(os.path.join(out_dir, f"adj_heatmap_seg{seg_idx}.png"))
+            plt.close()
 
         if topk > 0:
             neighbors = _topk_neighbors(adj, topk)

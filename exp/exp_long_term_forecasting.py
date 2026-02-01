@@ -89,28 +89,19 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         }
         append_graph_stats(os.path.join(log_dir, "stats.csv"), stats)
 
-        # NOTE: visuals/topk artifacts disabled; keep only stats.csv.
-        if bool(getattr(self.args, "graph_log_visuals", False)):
+        if bool(getattr(self.args, "graph_log_visuals", False)) or bool(
+            getattr(self.args, "graph_log_artifacts", False)
+        ):
             vis_root = os.path.join(log_dir, f"epoch{epoch:03d}_step{step:05d}")
             save_graph_visuals(
                 adjs,
                 os.path.join(vis_root, "A_mix"),
                 topk=topk,
                 num_segments=num_segments,
+                base_adj=base_adj,
+                raw_adjs=raw_adjs,
+                save_png=bool(getattr(self.args, "graph_log_visuals", False)),
             )
-            if base_adj is not None:
-                if isinstance(base_adj, torch.Tensor):
-                    base_vis = base_adj.detach().cpu()
-                else:
-                    base_vis = torch.tensor(base_adj)
-                if base_vis.dim() == 2:
-                    base_vis = base_vis.unsqueeze(0)
-                save_graph_visuals(
-                    [base_vis],
-                    os.path.join(vis_root, "prior"),
-                    topk=topk,
-                    num_segments=1,
-                )
 
     def _graph_log_dir(self, setting):
         log_root = getattr(self.args, "graph_log_dir", "./graph_logs")

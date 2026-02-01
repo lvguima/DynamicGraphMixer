@@ -304,6 +304,8 @@ if __name__ == '__main__':
                         help='output directory for graph logs')
     parser.add_argument('--graph_log_visuals', action='store_true', default=False,
                         help='save adjacency heatmaps/topk neighbors when graph logging')
+    parser.add_argument('--graph_log_artifacts', action='store_true', default=False,
+                        help='save adjacency arrays/topk neighbors for plotting (no png)')
 
     args = parser.parse_args()
     if torch.cuda.is_available() and args.use_gpu:
