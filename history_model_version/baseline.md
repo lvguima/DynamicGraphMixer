@@ -18,4 +18,4 @@ TimesNet is excluded per request.
 
 ## Our Best Result (DynamicGraphMixer, ablations B0?B5)
 
-No ablation logs found for flotation_B0?B5.
+No ablation logs found for flotation_B0?B5.	

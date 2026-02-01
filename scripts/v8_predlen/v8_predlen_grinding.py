@@ -159,7 +159,7 @@ def main() -> None:
     parser.add_argument("--python", dest="python_bin", default=sys.executable)
     parser.add_argument("--root_path", default="./datasets")
     parser.add_argument("--label_len", type=int, default=48)
-    parser.add_argument("--graph_log_interval", type=int, default=200)
+    parser.add_argument("--graph_log_interval", type=int, default=50)
     parser.add_argument("--dry_run", action="store_true")
     args = parser.parse_args()
 

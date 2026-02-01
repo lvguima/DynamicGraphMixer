@@ -289,10 +289,12 @@ class Model(nn.Module):
             dyn_idx = torch.topk(scores_dyn, k, dim=-1).indices
             base_idx = torch.topk(scores_base, k, dim=-1).indices
             matches = dyn_idx.unsqueeze(-1) == base_idx.unsqueeze(-2)
+            # overlap: [B, N], per-variable neighbor-set agreement
             overlap = matches.any(-1).float().mean(-1)
-            return overlap.mean(-1).clamp(0.0, 1.0)
+            return overlap.clamp(0.0, 1.0)
         if self.routing_conf_metric == "l1_distance":
-            l1 = torch.abs(dyn_adj - base_adj).mean(dim=(-1, -2))
+            # per-variable distance (mean over outgoing neighbors)
+            l1 = torch.abs(dyn_adj - base_adj).mean(dim=-1)  # [B, N]
             conf = 1.0 - (l1 / max(1e-6, float(self.routing_l1_scale)))
             return conf.clamp(0.0, 1.0)
         raise ValueError(f"Unsupported routing_conf_metric: {self.routing_conf_metric}")
@@ -361,7 +363,8 @@ class Model(nn.Module):
                             if self.current_epoch <= self.routing_warmup_epochs:
                                 alpha = torch.ones_like(alpha)
                         if alpha is not None:
-                            alpha_view = alpha.view(-1, 1, 1)
+                            # alpha: [B, N] -> broadcast over outgoing neighbors
+                            alpha_view = alpha.unsqueeze(-1)
                             adj = (1.0 - alpha_view) * dyn_adj + alpha_view * base_adj
                             if conf_list is not None:
                                 conf_list.append(conf.detach().cpu())

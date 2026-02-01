@@ -15,7 +15,7 @@ EXPERIMENTS = [
         "c_out": 7,
         "pred_len": 96,
         "prior_method": "mi",
-        "graph_log_interval": 200,
+        "graph_log_interval": 50,
     },
     {
         "name": "weather",
@@ -27,7 +27,7 @@ EXPERIMENTS = [
         "c_out": 21,
         "pred_len": 192,
         "prior_method": "mi",
-        "graph_log_interval": 200,
+        "graph_log_interval": 50,
     },
     {
         "name": "grinding",
@@ -39,7 +39,7 @@ EXPERIMENTS = [
         "c_out": 12,
         "pred_len": 30,
         "prior_method": "pearson_abs",
-        "graph_log_interval": 200,
+        "graph_log_interval": 50,
     },
     {
         "name": "flotation",
