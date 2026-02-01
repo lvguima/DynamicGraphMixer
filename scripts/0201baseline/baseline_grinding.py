@@ -86,8 +86,6 @@ def build_base_args(root_path: str, label_len: int) -> list[str]:
         "gelu",
         "--factor",
         "1",
-        "--distil",
-        "1",
         "--des",
         "baseline",
     ]
@@ -139,4 +137,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
