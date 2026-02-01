@@ -130,7 +130,6 @@ def build_base_args(root_path: str, label_len: int, pred_len: int, graph_log_int
         "2",
         "--graph_log_dir",
         "./graph_logs",
-        "--graph_log_visuals",
     ]
     return args
 
