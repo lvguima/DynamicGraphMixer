@@ -302,6 +302,8 @@ if __name__ == '__main__':
                         help='number of segments to visualize per log step')
     parser.add_argument('--graph_log_dir', type=str, default='./graph_logs',
                         help='output directory for graph logs')
+    parser.add_argument('--graph_log_visuals', action='store_true', default=False,
+                        help='save adjacency heatmaps/topk neighbors when graph logging')
 
     args = parser.parse_args()
     if torch.cuda.is_available() and args.use_gpu:
