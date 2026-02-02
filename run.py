@@ -217,9 +217,13 @@ if __name__ == '__main__':
     parser.add_argument('--decomp_alpha', type=float, default=0.3,
                         help='alpha for EMA decomposition')
     parser.add_argument('--trend_head', type=str, default='none',
-                        help='trend head: none or linear')
+                        help='trend head: none, linear, or mlp')
     parser.add_argument('--trend_head_share', type=int, default=1,
                         help='share trend head across variables (1 yes, 0 no)')
+    parser.add_argument('--trend_head_hidden', type=int, default=0,
+                        help='hidden dim for trend head MLP (0 uses seq_len)')
+    parser.add_argument('--trend_head_dropout', type=float, default=-1.0,
+                        help='dropout for trend head MLP (-1 uses global dropout)')
     parser.add_argument('--trend_only', action='store_true', default=False,
                         help='use only trend branch for prediction (requires decomp_mode=ema and trend_head=linear)')
     parser.add_argument('--graph_base_mode', type=str, default='none',

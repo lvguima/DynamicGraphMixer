@@ -1,3 +1,4 @@
+import math
 import os
 import numpy as np
 import torch
@@ -13,17 +14,30 @@ from modules.graph_correction import GraphCorrectionHead
 
 
 class TrendHead(nn.Module):
-    def __init__(self, seq_len, pred_len, num_vars, share=True):
+    def __init__(self, seq_len, pred_len, num_vars, share=True, hidden_dim=None, dropout=0.0):
         super().__init__()
         self.share = bool(share)
         self.num_vars = int(num_vars)
         self.seq_len = int(seq_len)
         self.pred_len = int(pred_len)
+        hidden = int(hidden_dim) if hidden_dim is not None else self.seq_len
+        drop_p = float(dropout)
+
+        def build_mlp():
+            layers = [
+                nn.Linear(self.seq_len, hidden),
+                nn.GELU(),
+            ]
+            if drop_p > 0:
+                layers.append(nn.Dropout(drop_p))
+            layers.append(nn.Linear(hidden, self.pred_len))
+            return nn.Sequential(*layers)
+
         if self.share:
-            self.proj = nn.Linear(self.seq_len, self.pred_len)
+            self.proj = build_mlp()
         else:
             self.proj = nn.ModuleList(
-                [nn.Linear(self.seq_len, self.pred_len) for _ in range(self.num_vars)]
+                [build_mlp() for _ in range(self.num_vars)]
             )
 
     def forward(self, x):
@@ -55,7 +69,12 @@ class Model(nn.Module):
         self.graph_map_alpha = float(getattr(configs, "graph_map_alpha", 0.3))
         self.graph_map_detach = bool(getattr(configs, "graph_map_detach", False))
         self.decomp_mode = str(getattr(configs, "decomp_mode", "none")).lower()
-        self.decomp_alpha = float(getattr(configs, "decomp_alpha", 0.3))
+        decomp_alpha = float(getattr(configs, "decomp_alpha", 0.3))
+        decomp_alpha = max(0.0, min(1.0, decomp_alpha))
+        eps = 1e-4
+        decomp_alpha = min(max(decomp_alpha, eps), 1.0 - eps)
+        decomp_logit = math.log(decomp_alpha / (1.0 - decomp_alpha))
+        self.decomp_alpha = nn.Parameter(torch.full((1, self.enc_in), decomp_logit, dtype=torch.float))
         self.trend_head_mode = str(getattr(configs, "trend_head", "none")).lower()
         self.trend_head_share = bool(int(getattr(configs, "trend_head_share", 1)))
         self.trend_only = bool(getattr(configs, "trend_only", False))
@@ -112,14 +131,22 @@ class Model(nn.Module):
         self.trend_head = None
         if self.decomp_mode not in ("none", "ema"):
             raise ValueError(f"Unsupported decomp_mode: {self.decomp_mode}")
-        if self.trend_head_mode not in ("none", "linear"):
+        self.trend_head_hidden = int(getattr(configs, "trend_head_hidden", self.seq_len))
+        if self.trend_head_hidden <= 0:
+            self.trend_head_hidden = self.seq_len
+        self.trend_head_dropout = float(getattr(configs, "trend_head_dropout", -1.0))
+        if self.trend_head_dropout < 0:
+            self.trend_head_dropout = float(getattr(configs, "dropout", 0.0))
+        if self.trend_head_mode not in ("none", "linear", "mlp"):
             raise ValueError(f"Unsupported trend_head: {self.trend_head_mode}")
-        if self.decomp_mode == "ema" and self.trend_head_mode == "linear":
+        if self.decomp_mode == "ema" and self.trend_head_mode in ("linear", "mlp"):
             self.trend_head = TrendHead(
                 seq_len=self.seq_len,
                 pred_len=self.pred_len,
                 num_vars=self.enc_in,
                 share=self.trend_head_share,
+                hidden_dim=self.trend_head_hidden,
+                dropout=self.trend_head_dropout,
             )
         if self.trend_only:
             if self.decomp_mode != "ema" or self.trend_head is None:
@@ -436,7 +463,7 @@ class Model(nn.Module):
 
     def _ema_decompose(self, x_enc):
         # x_enc: [B, L, C]
-        alpha = max(0.0, min(1.0, float(self.decomp_alpha)))
+        alpha = torch.sigmoid(self.decomp_alpha)
         bsz, seq_len, n_vars = x_enc.shape
         if seq_len == 0:
             return x_enc, x_enc
